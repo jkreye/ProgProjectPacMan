@@ -51,7 +51,9 @@ public class Game_Controller implements Runnable{
         QUIT,
         START,
         PAUSE_TOGGLE,
-        MENU
+        MENU,
+        HIGH_SCORES,
+        SETTINGS
     }
     Game_Controller(){
         mGame_C_Ref = this;

@@ -23,7 +23,7 @@ public class GUI_Controller implements Runnable {
     GUI_Controller(Game_Controller gameController) {
         mGame_C_Ref = gameController;
 
-        window = new JFrame("Mein tolles Spiel");
+        window = new JFrame("Cookie Collector");
         //Beim Schließen des fensters wird die Anwendung beendet
         window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         window.setLayout(null);
