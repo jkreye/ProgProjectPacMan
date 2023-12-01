@@ -1,8 +1,10 @@
 package org.pacman;
 
 public class Game_Controller implements Runnable{
+    private Pacman pacman;
     private static GUI_Controller  mGUI_C_Ref;
     private static Game_Controller  mGame_C_Ref;
+    private Game_Panel gamePanel;
     private Thread gameThread;
     private boolean mRunning = true;
     public static final int mTickrate = 1000 / 60; // Tickrate in 60 pro Sekunde
@@ -17,6 +19,7 @@ public class Game_Controller implements Runnable{
             startTime = System.currentTimeMillis();
             //Game Logic
             if (state != GAMESTATE.PAUSED){
+                gamePanel.repaint();
 
             }
             //
@@ -26,6 +29,7 @@ public class Game_Controller implements Runnable{
                 try {
                     Thread.sleep(mTickrate - deltaTime);
                 } catch (InterruptedException e) {
+                    System.err.println("Game thread interrupted");
                     throw new RuntimeException(e);
                 }
             }
@@ -44,6 +48,7 @@ public class Game_Controller implements Runnable{
         GAMEOVER
     }
 
+
     private GAMESTATE state; // aktueller Zustand
 
     //welche Aktionen können auftreten
@@ -53,14 +58,23 @@ public class Game_Controller implements Runnable{
         PAUSE_TOGGLE,
         MENU,
         HIGH_SCORES,
-        SETTINGS
+        SETTINGS,
+        MOVE_UP,
+        MOVE_DOWN,
+        MOVE_LEFT,
+        MOVE_RIGHT
     }
     Game_Controller(){
+
+
         mGame_C_Ref = this;
         mGUI_C_Ref = new GUI_Controller(this);
+        this.gamePanel = GUI_Controller.getGamePanel();
+        pacman = new Pacman(300, 300);
         //starten des Gameloop
         gameThread = new Thread(this);
         gameThread.start();
+
 
         //wechseln zum Menü
         changeState(GAMESTATE.MENU);
@@ -99,6 +113,37 @@ public class Game_Controller implements Runnable{
                 }
             }
             case MENU -> changeState(GAMESTATE.MENU);
+
+            case MOVE_UP -> movePacmanUp();
+            case MOVE_DOWN -> movePacmanDown();
+            case MOVE_LEFT -> movePacmanLeft();
+            case MOVE_RIGHT -> movePacmanRight();
+
         }
+    }
+
+    private void movePacmanUp() {
+        // Logik für Bewegung nach oben
+        pacman.moveUp();
+    }
+
+    private void movePacmanDown() {
+        // Logik für Bewegung nach unten
+        pacman.moveDown();
+    }
+
+    private void movePacmanLeft() {
+        // Logik für Bewegung nach links
+        pacman.moveLeft();
+    }
+
+    private void movePacmanRight() {
+        // Logik für Bewegung nach rechts
+        pacman.moveRight();
+
+    }
+
+    public Pacman getPacman() {
+        return pacman;
     }
 }

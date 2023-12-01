@@ -2,6 +2,8 @@ package org.pacman;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 public class Main_Menu extends JPanel {
     private JButton start = new JButton("Start Game");
@@ -12,7 +14,7 @@ public class Main_Menu extends JPanel {
 
     Main_Menu() {
         // Load the custom font
-        Font customFont = FontLoader.loadFont("ArcadeClassic.ttf", 20);
+        Font customFont = FontLoader.loadFont("font/ArcadeClassic.ttf", 20);
 
 
         // Set up BoxLayout
@@ -52,9 +54,30 @@ public class Main_Menu extends JPanel {
         settings.addActionListener(e -> Game_Controller.getGame_C_Ref().fireEvent(Game_Controller.ACTION.SETTINGS));
         quit.addActionListener(e -> System.exit(0)); // Exit the application
 
+        // Add mouse listeners to handle button hover effect
+        addHoverEffect(start);
+        addHoverEffect(highScores);
+        addHoverEffect(settings);
+        addHoverEffect(quit);
+
         setFocusable(false);
     }
 
+    private void addHoverEffect(JButton button) {
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                // Set a border or change the background color when the mouse enters
+                button.setBorderPainted(true); // Show the button border
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                // Remove the border or revert to the original state when the mouse exits
+                button.setBorderPainted(false); // Hide the button border
+            }
+        });
+    }
     private void customizeButton(JButton button, Font customFont) {
         button.setAlignmentX(Component.CENTER_ALIGNMENT);
         button.setPreferredSize(new Dimension(200, 50)); // Set button size

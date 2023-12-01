@@ -11,7 +11,7 @@ public class GUI_Controller implements Runnable {
 
     // einzelne Fenster/Komponenten des Spiels
     private Main_Menu mMainMenu;
-    private Game_Panel mGame_Panel;
+    private static Game_Panel mGame_Panel;
     private Pause_Menu mPauseMenu;
 
     private Game_Controller mGame_C_Ref; // Referenz zum Gamecontroller
@@ -42,7 +42,7 @@ public class GUI_Controller implements Runnable {
 
         // Objekte der Pannels werden angelegt
         mMainMenu = new Main_Menu();
-        mGame_Panel = new Game_Panel();
+        mGame_Panel = new Game_Panel(mGame_C_Ref);
         mPauseMenu = new Pause_Menu();
 
         //Panels werden hinzugefügt und skaliert
@@ -79,6 +79,8 @@ public class GUI_Controller implements Runnable {
         window.setAutoRequestFocus(true);
     }
 
+
+
     /**
      * Veränderung des dargestellten Fensters z.B Hauptmenü -> Spiel
      * zum wechsel changeState() des Game_Controllers verwenden
@@ -93,7 +95,10 @@ public class GUI_Controller implements Runnable {
 
         switch (state) {
             case MENU -> mMainMenu.setVisible(true);
-            case RUNNING -> mGame_Panel.setVisible(true);
+            case RUNNING -> {
+                mGame_Panel.setVisible(true);
+                mGame_Panel.requestFocusInWindow();
+            }
             case PAUSED -> mPauseMenu.setVisible(true);
         }
         window.repaint();
@@ -127,5 +132,9 @@ public class GUI_Controller implements Runnable {
     public void quit() {
         mGraphicsRunning = false;
         window.dispose();
+    }
+
+    public static Game_Panel getGamePanel() {
+        return mGame_Panel;
     }
 }

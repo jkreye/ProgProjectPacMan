@@ -8,11 +8,11 @@ import java.awt.event.ComponentEvent;
 public class Pause_Menu extends JPanel {
 
     // Load the custom font
-    Font customFont = FontLoader.loadFont("ArcadeClassic.ttf", 20);
+    Font customFont = FontLoader.loadFont("font/ArcadeClassic.ttf", 20);
     private JButton menubtn = new JButton();
     Pause_Menu(){
         // Load the custom font
-        Font customFont = FontLoader.loadFont("ArcadeClassic.ttf", 20);
+        Font customFont = FontLoader.loadFont("font/ArcadeClassic.ttf", 20);
 
         setLayout(null);
         // setBackground(new Color(255, 183, 0, 170));
