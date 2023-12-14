@@ -28,8 +28,8 @@ public class GUI_Controller implements Runnable {
         window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         window.setLayout(null);
         //window.setExtendedState(Frame.MAXIMIZED_BOTH); // Fenster füllt den Bildschirm
-        // window.setBounds(100, 100, 1920, 1080); // Setzt Position und Größe des Fensters
-        window.setBounds(100, 100, 1280, 720); // Setzt Position und Größe des Fensters
+        window.setBounds(100, 100, 1920, 1080); // Setzt Position und Größe des Fensters
+        //window.setBounds(100, 100, 1280, 720); // Setzt Position und Größe des Fensters
 
         // erlaube resize
         window.setResizable(true);

@@ -1,9 +1,11 @@
+/* Pacman.java */
+
 package org.pacman;
 
 public class Pacman {
     private int x, y;
     private int dx, dy;
-    private final int speed = 5; // Geschwindigkeit von Pac-Man
+    private int speed = 0; // Geschwindigkeit von Pac-Man
 
     public Pacman(int startX, int startY) {
         x = startX;
@@ -25,6 +27,10 @@ public class Pacman {
     // Methoden zum Abrufen der Position
     public int getX() { return x; }
     public int getY() { return y; }
+
+    public int getSpeed() {return speed;}
+
+    public void setSpeed(int newSpeed) {speed = newSpeed;}
 
     public void moveUp() {
         y -= speed;

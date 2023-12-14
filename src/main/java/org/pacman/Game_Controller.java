@@ -1,11 +1,16 @@
+/* Game_Controller.java */
 package org.pacman;
 
+import java.awt.*;
+
 public class Game_Controller implements Runnable{
-    private Pacman pacman;
     private static GUI_Controller  mGUI_C_Ref;
     private static Game_Controller  mGame_C_Ref;
     private Game_Panel gamePanel;
     private Thread gameThread;
+
+    private Pacman pacman;
+    private Maze maze;
     private boolean mRunning = true;
     public static final int mTickrate = 1000 / 60; // Tickrate in 60 pro Sekunde
 
@@ -20,6 +25,8 @@ public class Game_Controller implements Runnable{
             //Game Logic
             if (state != GAMESTATE.PAUSED){
                 gamePanel.repaint();
+                //System.out.println(maze.getCellSize());
+
 
             }
             //
@@ -39,6 +46,7 @@ public class Game_Controller implements Runnable{
             Code für Speichern etc.
          */
     }
+
 
     // in welchen Zuständen kann das Programm sein
     public enum GAMESTATE{
@@ -65,12 +73,16 @@ public class Game_Controller implements Runnable{
         MOVE_RIGHT
     }
     Game_Controller(){
-
-
         mGame_C_Ref = this;
         mGUI_C_Ref = new GUI_Controller(this);
         this.gamePanel = GUI_Controller.getGamePanel();
-        pacman = new Pacman(300, 300);
+
+        // Initialisieren des Labyrinths
+        maze = new Maze();
+
+        // Initialisieren von Pacman
+        initializeGame();
+
         //starten des Gameloop
         gameThread = new Thread(this);
         gameThread.start();
@@ -78,6 +90,12 @@ public class Game_Controller implements Runnable{
 
         //wechseln zum Menü
         changeState(GAMESTATE.MENU);
+    }
+
+    public void initializeGame() {
+        Point PacManStart = maze.findPacmanStart();
+        pacman = new Pacman(PacManStart.x, PacManStart.y);
+        // Weitere Initialisierungen...
     }
 
     /**
@@ -103,7 +121,10 @@ public class Game_Controller implements Runnable{
      */
     public void fireEvent(ACTION a){
         switch (a){
-            case START -> changeState(GAMESTATE.RUNNING);
+            case START -> {
+                initializeGame();
+                changeState(GAMESTATE.RUNNING);
+            }
             case QUIT -> mRunning = false;
             case PAUSE_TOGGLE -> {
                 if (state == GAMESTATE.PAUSED){

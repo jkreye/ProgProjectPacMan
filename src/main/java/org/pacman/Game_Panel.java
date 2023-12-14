@@ -1,3 +1,4 @@
+/* Game_Panel.java */
 package org.pacman;
 
 import javax.swing.*;
@@ -6,18 +7,19 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 
 public class Game_Panel extends JPanel implements KeyListener {
-
+    private static final int PADDING_TOP = 5;
     private JLabel label;
     private Game_Controller gameController;
     private Maze maze;
 
     Game_Panel(Game_Controller controller){
         maze = new Maze();
-
         this.gameController = controller;
 
         setDoubleBuffered(true);
-        setBackground(new Color(70, 70, 70));
+
+        //setBackground(new Color(70, 70, 70));
+        setBackground(new Color(0,0,0));
 
         label = new JLabel("Game (ESC: Pause Menü)");
         label.setBounds(100, 100, 100, 50);
@@ -34,35 +36,48 @@ public class Game_Panel extends JPanel implements KeyListener {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         char[][] grid = maze.getGrid();
+        Pacman pacman = gameController.getPacman();
+
         // Berechnen der Größe einer einzelnen Zelle basierend auf der Fenstergröße
-        int cellSize = Math.min(getWidth() / grid[0].length, getHeight() / (grid.length+5));
+        Maze.calculateCellSize(getWidth(), getHeight(), grid, PADDING_TOP);
+
+        int cellSize = Maze.getCellSize();
+
+
 
         // Berechnen der Größe des gesamten Labyrinths
         int mazeWidth = grid[0].length * cellSize;
-        int mazeHeight = (grid.length+5) * cellSize;
+        int mazeHeight = (grid.length+PADDING_TOP) * cellSize;
 
         // Berechnen der Startposition, um das Labyrinth in der Mitte zu zeichnen
         int startX = (getWidth() - mazeWidth) / 2;
 
         // Definieren eines oberen Randes
-        int paddingTop = 100; // Zum Beispiel 50 Pixel
+        int paddingTop = 100;
         int startY = paddingTop + (getHeight() - mazeHeight - paddingTop) / 2;
 
         // Zeichnen des Labyrinths beginnend bei startX und startY
         drawMaze(g, startX, startY, cellSize);
 
-        Pacman pacman = gameController.getPacman();
-        g.setColor(Color.YELLOW);
-        g.fillOval(pacman.getX(), pacman.getY(), 20, 20); // Größe und Form von Pac-Man
+        // pacman
+        if (pacman != null) {
+            pacman.setSpeed(cellSize/3);
+            int pacmanX = startX + pacman.getX();
+            int pacmanY = startY + pacman.getY();
+            g.setColor(Color.YELLOW);
+            g.fillOval(pacmanX, pacmanY, cellSize, cellSize);
+        }
+
+
 
     }
 
 
     private void drawMaze(Graphics g, int startX, int startY, int cellSize) {
         char[][] grid = maze.getGrid();
+        int coinSize = cellSize / 5; // Größe der Coins
+        int killCoinSize = cellSize / 3; // Größe der KillCoins
 
-        int pointSize = cellSize / 3;
-        int halfPointSize = pointSize / 2;
 
         for (int row = 0; row < grid.length; row++) {
             for (int col = 0; col < grid[row].length; col++) {
@@ -70,23 +85,32 @@ public class Game_Panel extends JPanel implements KeyListener {
                     g.setColor(Color.BLUE);
                     g.fillRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
                 }
+                if (grid[row][col] == '-') {
+                    g.setColor(Color.RED);
+                    g.fillRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
+                }
                 if (grid[row][col] == '.') {
-                    // Berechnen der zentrierten Position für den Punkt
-                    int x = startX + col * cellSize + (cellSize - pointSize) / 2;
-                    int y = startY + row * cellSize + (cellSize - pointSize) / 2;
+                    // Coins
+                    // Zentrieren der Coins in jeder Zelle
+                    int coinX = startX + col * cellSize + cellSize / 2 - coinSize / 2;
+                    int coinY = startY + row * cellSize + cellSize / 2 - coinSize / 2;
 
                     g.setColor(Color.yellow);
-                    g.fillRect(x, y, cellSize/3, cellSize/3);
+                    g.fillOval(coinX, coinY, coinSize, coinSize);
                 }
                 if (grid[row][col] == 'o') {
-                    int x = startX + col * cellSize + (cellSize - pointSize) / 2;
-                    int y = startY + row * cellSize + (cellSize - pointSize) / 2;
+                    // Killcoins
+                    // Zentrieren der Killcoins in jeder Zelle
+                    int killcoinX = startX + col * cellSize + cellSize / 2 - killCoinSize / 2;
+                    int killcoinY = startY + row * cellSize + cellSize / 2 - killCoinSize / 2;
 
                     g.setColor(Color.green);
-                    g.fillRect(x, y, cellSize/3, cellSize/3);                }
+                    g.fillRect(killcoinX, killcoinY, killCoinSize, killCoinSize);
+                }
             }
         }
     }
+
 
     @Override
     public void keyTyped(KeyEvent e) {

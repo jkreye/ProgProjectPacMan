@@ -15,6 +15,7 @@ public class Main_Menu extends JPanel {
     Main_Menu() {
         // Load the custom font
         Font customFont = FontLoader.loadFont("font/ArcadeClassic.ttf", 20);
+        Font customFontTitle = FontLoader.loadFont("font/ArcadeClassic.ttf", 50);
 
 
         // Set up BoxLayout
@@ -28,6 +29,13 @@ public class Main_Menu extends JPanel {
 
         // Set the background color of the JPanel to black
         setBackground(Color.BLACK);
+
+        // Erstellen des JLabel für den Schriftzug
+        JLabel titleLabel = new JLabel("Cookie Collector", JLabel.CENTER);
+        titleLabel.setFont(customFontTitle);
+        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // Zentrieren des Labels
+
 
         // Create a subpanel to hold the buttons
         JPanel buttonPanel = new JPanel();
@@ -46,6 +54,10 @@ public class Main_Menu extends JPanel {
         buttonPanel.add(Box.createVerticalGlue());
 
         // Add the subpanel to the main panel
+        add(Box.createVerticalGlue());
+        add(titleLabel);
+        add(Box.createRigidArea(new Dimension(0, 20))); // Optional: Abstand zwischen Titel und Buttons
+
         add(buttonPanel);
 
         // Add action listeners
