@@ -9,6 +9,9 @@ public class Maze {
     private char[][] grid2;
     private static int cellSize;
 
+    private int mazeStartX;
+    private int mazeStartY;
+
     public Maze() {
         grid2 = new char[][] {
                 // Obere Grenze
@@ -92,11 +95,29 @@ public class Maze {
         return cellSize;
     }
 
-    public static int calculateStartX(int panelWidth, int mazeWidth) {
-        return (panelWidth - mazeWidth) / 2;
+
+    public int getMazeStartY() {
+        return mazeStartY;
     }
 
-    public static int calculateStartY(int panelHeight, int mazeHeight, int paddingTop) {
-        return paddingTop + (panelHeight - mazeHeight - paddingTop) / 2;
+    public void setMazeStartY(int mazeStartY) {
+        this.mazeStartY = mazeStartY;
+    }
+
+    public int getMazeStartX() {
+        return mazeStartX;
+    }
+
+    public void setMazeStartX(int mazeStartX) {
+        this.mazeStartX = mazeStartX;
+    }
+
+    public boolean isWall(int gridX, int gridY) {
+        // Überprüfen, ob die Koordinaten innerhalb der Grenzen des Labyrinths liegen
+        if (gridX < 0 || gridX >= grid[0].length || gridY < 0 || gridY >= grid.length) {
+            return true; // Position außerhalb des Labyrinths wird als Wand betrachtet
+        }
+
+        return grid[gridY][gridX] == '#'; // '#' repräsentiert eine Wand
     }
 }

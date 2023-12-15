@@ -10,10 +10,8 @@ public class Game_Panel extends JPanel implements KeyListener {
     private static final int PADDING_TOP = 5;
     private JLabel label;
     private Game_Controller gameController;
-    private Maze maze;
 
     Game_Panel(Game_Controller controller){
-        maze = new Maze();
         this.gameController = controller;
 
         setDoubleBuffered(true);
@@ -35,15 +33,13 @@ public class Game_Panel extends JPanel implements KeyListener {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        char[][] grid = maze.getGrid();
+        char[][] grid = gameController.getMaze().getGrid();
         Pacman pacman = gameController.getPacman();
 
         // Berechnen der Größe einer einzelnen Zelle basierend auf der Fenstergröße
         Maze.calculateCellSize(getWidth(), getHeight(), grid, PADDING_TOP);
 
         int cellSize = Maze.getCellSize();
-
-
 
         // Berechnen der Größe des gesamten Labyrinths
         int mazeWidth = grid[0].length * cellSize;
@@ -53,10 +49,12 @@ public class Game_Panel extends JPanel implements KeyListener {
         int startX = (getWidth() - mazeWidth) / 2;
 
         // Definieren eines oberen Randes
-        int paddingTop = 100;
+        int paddingTop = 150;
         int startY = paddingTop + (getHeight() - mazeHeight - paddingTop) / 2;
 
         // Zeichnen des Labyrinths beginnend bei startX und startY
+        gameController.setMazeStartPositions(startX, startY);
+
         drawMaze(g, startX, startY, cellSize);
 
         // pacman
@@ -64,8 +62,13 @@ public class Game_Panel extends JPanel implements KeyListener {
             pacman.setSpeed(cellSize/3);
             int pacmanX = startX + pacman.getX();
             int pacmanY = startY + pacman.getY();
+
             g.setColor(Color.YELLOW);
             g.fillOval(pacmanX, pacmanY, cellSize, cellSize);
+
+            g.setColor(Color.RED); // Farbe für den Punkt
+            g.fillOval(pacmanX, pacmanY, 5, 5);
+
         }
 
 
@@ -74,7 +77,7 @@ public class Game_Panel extends JPanel implements KeyListener {
 
 
     private void drawMaze(Graphics g, int startX, int startY, int cellSize) {
-        char[][] grid = maze.getGrid();
+        char[][] grid = gameController.getMaze().getGrid();
         int coinSize = cellSize / 5; // Größe der Coins
         int killCoinSize = cellSize / 3; // Größe der KillCoins
 
@@ -84,6 +87,8 @@ public class Game_Panel extends JPanel implements KeyListener {
                 if (grid[row][col] == '#') {
                     g.setColor(Color.BLUE);
                     g.fillRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
+                    g.setColor(Color.GREEN);
+                    g.drawRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
                 }
                 if (grid[row][col] == '-') {
                     g.setColor(Color.RED);
@@ -120,18 +125,23 @@ public class Game_Panel extends JPanel implements KeyListener {
     // KeyListener-Methoden
     @Override
     public void keyPressed(KeyEvent e) {
+        gameController.getPacmanGridPosition();
+
         switch (e.getKeyCode()) {
             case KeyEvent.VK_W:
+            case KeyEvent.VK_UP:
                 gameController.fireEvent(Game_Controller.ACTION.MOVE_UP);
-                System.out.println("up");
                 break;
             case KeyEvent.VK_A:
+            case KeyEvent.VK_LEFT:
                 gameController.fireEvent(Game_Controller.ACTION.MOVE_LEFT);
                 break;
             case KeyEvent.VK_S:
+            case KeyEvent.VK_DOWN:
                 gameController.fireEvent(Game_Controller.ACTION.MOVE_DOWN);
                 break;
             case KeyEvent.VK_D:
+            case KeyEvent.VK_RIGHT:
                 gameController.fireEvent(Game_Controller.ACTION.MOVE_RIGHT);
                 break;
             case KeyEvent.VK_ESCAPE:
