@@ -10,9 +10,18 @@ public class Game_Panel extends JPanel implements KeyListener {
     private static final int PADDING_TOP = 5;
     private JLabel label;
     private Game_Controller gameController;
+    private Maze maze;
+
+    // Portal Blink
+    private boolean portalBlinkState = false;
+    private final long BLINK_DURATION = 100; // Dauer des Aufblinkens in Millisekunden
+    private long blinkStartTime = -1;
+
 
     Game_Panel(Game_Controller controller){
         this.gameController = controller;
+        this.maze = gameController.getMaze();
+
 
         setDoubleBuffered(true);
 
@@ -40,6 +49,7 @@ public class Game_Panel extends JPanel implements KeyListener {
         Maze.calculateCellSize(getWidth(), getHeight(), grid, PADDING_TOP);
 
         int cellSize = Maze.getCellSize();
+        int calcSpeed = cellSize/3;
 
         // Berechnen der Größe des gesamten Labyrinths
         int mazeWidth = grid[0].length * cellSize;
@@ -52,32 +62,89 @@ public class Game_Panel extends JPanel implements KeyListener {
         int paddingTop = 150;
         int startY = paddingTop + (getHeight() - mazeHeight - paddingTop) / 2;
 
-        // Zeichnen des Labyrinths beginnend bei startX und startY
-        gameController.setMazeStartPositions(startX, startY);
 
-        drawMaze(g, startX, startY, cellSize);
 
         // pacman
         if (pacman != null) {
-            pacman.setSpeed(cellSize/3);
+            // Zeichnen des Labyrinths beginnend bei startX und startY
+            gameController.setMazeStartPositions(startX, startY);
+
+            drawMaze(g, startX, startY, cellSize);
+
+
+            pacman.setSpeed(calcSpeed);
             int pacmanX = startX + pacman.getX();
             int pacmanY = startY + pacman.getY();
 
             g.setColor(Color.YELLOW);
             g.fillOval(pacmanX, pacmanY, cellSize, cellSize);
 
-            g.setColor(Color.RED); // Farbe für den Punkt
-            g.fillOval(pacmanX, pacmanY, 5, 5);
-
         }
 
+        // Zeichnen der Geister
+        for (Ghost ghost : gameController.getGhosts()) {
+            ghost.setSpeed(calcSpeed);
 
+        }
+        drawGhosts(g, startX, startY, cellSize);
 
+        // Score und Lives oberhalb des Labyrinths zeichnen
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 16)); // Setzen Sie die Schriftart und -größe
+        int scoreY = 30; // Y-Position für Score und Lives
+        g.drawString("Score: " + gameController.getScore(), startX, scoreY);
+        // Zeichnen der Leben als Kreise
+        int livesX = startX + 100; // X-Position für die Leben
+        int livesY = scoreY - 10;  // Y-Position für die Leben
+        int circleDiameter = cellSize/2;   // Durchmesser der Kreise
+        for (int i = 0; i < gameController.getLives(); i++) {
+            g.setColor(Color.YELLOW);
+            g.fillOval(livesX + i * (circleDiameter + 5), livesY, circleDiameter, circleDiameter);
+        }
     }
 
+    private void drawGhosts(Graphics g, int startX, int startY, int cellSize) {
+
+        for (Ghost ghost : gameController.getGhosts()) {
+            // Umrechnen der Geisterposition in Bildschirmkoordinaten
+            int ghostX = ghost.getX() +startX;
+            int ghostY = ghost.getY() +startY;
+
+            // Farbe basierend auf dem Geistertyp setzen
+            switch (ghost.getType()) {
+                case SHADOW:
+                    g.setColor(Color.RED);
+                    break;
+                case SPEEDY:
+                    g.setColor(Color.PINK);
+                    break;
+                case POKEY:
+                    g.setColor(Color.ORANGE);
+                    break;
+                case BASHFUL:
+                    g.setColor(Color.CYAN);
+                    break;
+                default:
+                    g.setColor(Color.GRAY);
+            }
+
+            // Zeichnen des Geists
+            g.fillOval(ghostX, ghostY, cellSize, cellSize);
+            g.drawRect(ghostX, ghostY, cellSize, cellSize);
+
+        }
+    }
 
     private void drawMaze(Graphics g, int startX, int startY, int cellSize) {
         char[][] grid = gameController.getMaze().getGrid();
+
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setColor(Color.BLUE);
+        // Einstellen der Randdicke
+        float borderWidth = 2.0f;
+        g2d.setStroke(new BasicStroke(borderWidth));
+
+
         int coinSize = cellSize / 5; // Größe der Coins
         int killCoinSize = cellSize / 3; // Größe der KillCoins
 
@@ -87,8 +154,8 @@ public class Game_Panel extends JPanel implements KeyListener {
                 if (grid[row][col] == '#') {
                     g.setColor(Color.BLUE);
                     g.fillRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
-                    g.setColor(Color.GREEN);
-                    g.drawRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
+                    g2d.setColor(Color.BLACK);
+                    g2d.drawRect(startX + col * cellSize, startY + row * cellSize, cellSize, cellSize);
                 }
                 if (grid[row][col] == '-') {
                     g.setColor(Color.RED);
@@ -111,6 +178,15 @@ public class Game_Panel extends JPanel implements KeyListener {
 
                     g.setColor(Color.green);
                     g.fillRect(killcoinX, killcoinY, killCoinSize, killCoinSize);
+                }
+                if (grid[row][col] == 'T') {
+                    // Zeichne Teleport-Punkt
+                    int telPointSize = (int) Math.round(cellSize*.8);
+                    int telX = startX + col * cellSize + cellSize / 2 - telPointSize / 2;
+                    int telY = startY + row * cellSize + cellSize / 2 - telPointSize / 2;
+                    //g.setColor(Color.MAGENTA);
+                    //g.drawOval(telX, telY, telPointSize, telPointSize);
+                    drawPortal(g, telX, telY, telPointSize);
                 }
             }
         }
@@ -154,6 +230,32 @@ public class Game_Panel extends JPanel implements KeyListener {
     @Override
     public void keyReleased(KeyEvent e) {
         // Diese Methode kann leer bleiben, wenn keine Aktion erforderlich ist
+    }
+
+    private void drawPortal(Graphics g, int x, int y, int cellSize) {
+        if (portalBlinkState) {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - blinkStartTime < BLINK_DURATION) {
+                g.setColor(Color.MAGENTA); // Blinkfarbe
+            } else {
+                g.setColor(Color.MAGENTA); // Ursprüngliche Farbe
+                portalBlinkState = false;
+            }
+            g.fillOval(x, y, cellSize, cellSize);
+        } else {
+            g.setColor(Color.MAGENTA); // Ursprüngliche Farbe
+            g.drawOval(x, y, cellSize, cellSize);
+        }
+
+    }
+
+    private void togglePortalBlink() {
+        portalBlinkState = true;
+        blinkStartTime = System.currentTimeMillis();
+    }
+
+    public void triggerPortalBlink() {
+        togglePortalBlink();
     }
 
 }
