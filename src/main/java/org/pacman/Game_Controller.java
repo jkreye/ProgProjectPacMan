@@ -23,14 +23,29 @@ public class Game_Controller implements Runnable{
     private int score = 0; // Punktestand
     private int lives = 3; // Anzahl der Leben
 
+    private long vulnerabilityDuration = 0;
+    private static final long VULNERABILITY_TIME = 5000;
+
+    private long nextGhostReleaseTime;
+    private static final long GHOST_RELEASE_INTERVAL = 5000; // 5 Sekunden in Millisekunden
+    private static final long INITIAL_RELEASE_DELAY = 1000; // 1 Sekunde in Millisekunden
+    private static final long BLINK_THRESHOLD = 2000; // Blinken beginnt 2 Sekunden vor Ende der Verwundbarkeit
+
+
+    private long pauseStartTime = 0;
+    private long pausedDuration = 0;
+
+    private Point releasePoint;
+
+
     private final Maze maze;
     private boolean mRunning = true;
     public static final int mTickrate = 1000 / 60; // Tickrate in 60 pro Sekunde
-    public static final int mTickrateMovement = 1000 / 18; // Tickrate PacMan
-    public static final int mTickrateMovementGhosts = 1000 / 14; // Tickrate Ghosts
+    public static final int mTickrateMovement = 1000 / 20; // Tickrate PacMan
+    public static final int mTickrateMovementGhosts = 1000 / 16; // Tickrate Ghosts
 
     // Konstanten für die Startpositionen und Geschwindigkeiten der Geister
-    private int GHOST_SPEED = 1; // Geschwindigkeit der Geister
+    private int GHOST_SPEED = 0; // Geschwindigkeit der Geister
 
 
     private void continuousMovement() {
@@ -88,15 +103,6 @@ public class Game_Controller implements Runnable{
         return getOppositeDirection(currentDirection);
     }
 
-
-    // Hilfsmethode, um zu überprüfen, ob zwei Richtungen gegensätzlich sind
-    private boolean isOppositeDirection(ACTION dir1, ACTION dir2) {
-        return (dir1 == ACTION.MOVE_UP && dir2 == ACTION.MOVE_DOWN) ||
-                (dir1 == ACTION.MOVE_DOWN && dir2 == ACTION.MOVE_UP) ||
-                (dir1 == ACTION.MOVE_LEFT && dir2 == ACTION.MOVE_RIGHT) ||
-                (dir1 == ACTION.MOVE_RIGHT && dir2 == ACTION.MOVE_LEFT);
-    }
-
     private ACTION getOppositeDirection(ACTION direction) {
         switch (direction) {
             case MOVE_UP: return ACTION.MOVE_DOWN;
@@ -110,16 +116,70 @@ public class Game_Controller implements Runnable{
     // Methode zum Aktualisieren der Position der Geister
     private void updateGhostPositions() {
         for (Ghost ghost : ghosts) {
-            if (isAtIntersection(ghost)) {
-                ghost.setDirection(chooseDirectionAtIntersection(ghost));
-            } else if (shouldTurnAround()) {
-                ghost.setDirection(getOppositeDirection(ghost.getDirection()));
-            } else if (isCollisionForGhost(ghost, ghost.getDirection())) {
-                // Bei Kollision, wähle eine neue zufällige Richtung
-                ghost.setDirection(getRandomDirection(ghost.getDirection(), ghost));
+            if (!ghost.isInJail()) {
+                if (isAtIntersection(ghost)) {
+                    ghost.setDirection(chooseDirectionAtIntersection(ghost));
+                } else if (shouldTurnAround()) {
+                    ghost.setDirection(getOppositeDirection(ghost.getDirection()));
+                } else if (isCollisionForGhost(ghost, ghost.getDirection())) {
+                    // Bei Kollision, wähle eine neue zufällige Richtung
+                    ghost.setDirection(getRandomDirection(ghost.getDirection(), ghost));
+                }
+                // Bewege den Geist in die aktuelle Richtung
+                moveGhost(ghost, ghost.getDirection());
             }
-            // Bewege den Geist in die aktuelle Richtung
-            moveGhost(ghost, ghost.getDirection());
+        }
+    }
+
+
+    private void checkPacmanGhostCollision() {
+        if (pacman != null) {
+            for (Ghost ghost : ghosts) {
+                if (Math.abs(pacman.getX() - ghost.getX()) < Maze.getCellSize() &&
+                        Math.abs(pacman.getY() - ghost.getY()) < Maze.getCellSize()) {
+
+                    if (ghost.getVulnerable()) {
+                        // Zurücksetzen des Geistes zum Spawnpoint
+                        Point ghostStart = maze.findGhostStart(ghost.getLetter());
+                        ghost.setX(ghostStart.x);
+                        ghost.setY(ghostStart.y);
+                        ghost.setIsInJail(true);
+                        ghost.setVulnerable(false);
+                        // Zurücksetzen des Timers für die Geisterfreilassung
+                        nextGhostReleaseTime = System.currentTimeMillis() + GHOST_RELEASE_INTERVAL;
+                    } else {
+                        // Kollision mit nicht-verwundbarem Geist
+                        loseLife();
+                        resetPacmanAndGhosts();
+
+                        lastDirection = ACTION.MOVE_NONE;
+                        nextDirection = ACTION.MOVE_NONE;
+                        break; // Unterbrechen der Schleife, da die Kollision bereits behandelt wird
+                    }
+                }
+            }
+        }
+    }
+
+    private void activatePowerPillEffect() {
+        for (Ghost ghost : ghosts) {
+            ghost.setVulnerable(true);
+        }
+        vulnerabilityDuration = VULNERABILITY_TIME;
+    }
+
+    // Bei Kollision Ghost + Pacman
+    private void resetPacmanAndGhosts() {
+        // Setzen Sie Pac-Man und Geister auf ihre Startpositionen zurück
+        pacman.setX(maze.findPacmanStart().x);
+        pacman.setY(maze.findPacmanStart().y);
+
+
+        for (Ghost ghost : ghosts) {
+            Point ghostStart = maze.findGhostStart(ghost.getLetter());
+            ghost.setX(ghostStart.x);
+            ghost.setY(ghostStart.y);
+            ghost.setIsInJail(true);
         }
     }
 
@@ -191,9 +251,8 @@ public class Game_Controller implements Runnable{
 
 
     private boolean shouldTurnAround() {
-        // Bestimmen Sie einen zufälligen Wert, z.B. 1% Wahrscheinlichkeit
-        return new Random().nextInt(1000) < 10;
-        //return false;
+        // Bestimmen Sie einen zufälligen Wert
+        return new Random().nextInt(1000) < 4;
     }
     //--
 
@@ -266,36 +325,102 @@ public class Game_Controller implements Runnable{
      */
     @Override
     public void run() {
-        long startTime, endTime, deltaTime;
-        while(mRunning){
-            startTime = System.currentTimeMillis();
-            //Game Logic
-            if (state != GAMESTATE.PAUSED){
-                gamePanel.repaint();
-                checkAndTeleportPacman();
+        long lastUpdateTime = System.currentTimeMillis();
 
+        while (mRunning) {
+            long startTime = System.currentTimeMillis();
+            long deltaTime = startTime - lastUpdateTime;
 
+            if (state != GAMESTATE.PAUSED) {
+                updateGame(deltaTime); // Extrahiert die Spiellogik in eine separate Methode
             }
-            //
-            endTime = System.currentTimeMillis();
-            deltaTime = endTime - startTime;
-            if (mTickrate - deltaTime > 0){
+
+            lastUpdateTime = startTime;
+            long frameTime = System.currentTimeMillis() - startTime;
+            long sleepTime = mTickrate - frameTime;
+
+            if (sleepTime > 0) {
                 try {
-                    Thread.sleep(mTickrate - deltaTime);
+                    Thread.sleep(sleepTime);
                 } catch (InterruptedException e) {
                     System.err.println("Game thread interrupted");
-                    throw new RuntimeException(e);
+                    break; // Verlassen Sie die Schleife im Falle einer Unterbrechung
                 }
             }
         }
         mGUI_C_Ref.quit();
-        /*
-            Code für Speichern etc.
-         */
+        // Code für Speichern etc.
+    }
+
+    private void updateGame(long deltaTime) {
+        long currentTime = System.currentTimeMillis();
+        gamePanel.repaint();
+        checkAndTeleportPacman();
+        checkPacmanGhostCollision();
+        checkForPowerPill();
+        if (currentTime >= nextGhostReleaseTime) {
+            releaseGhostFromJail();
+        }
+
+        if (vulnerabilityDuration > 0) {
+            vulnerabilityDuration -= deltaTime;
+            if (vulnerabilityDuration <= BLINK_THRESHOLD) {
+                for (Ghost ghost : ghosts) {
+                    ghost.setBlinking(true);
+                }
+            }
+            if (vulnerabilityDuration <= 0) {
+                for (Ghost ghost : ghosts) {
+                    ghost.setVulnerable(false);
+                    ghost.setBlinking(false);
+                }
+            }
+        }
+
+        for (Ghost ghost : ghosts) {
+            if (ghost.isMovingToReleasePoint()) {
+                ghost.moveToReleasePoint(maze.findReleasePoint());
+            }
+        }
+    }
+
+    private void checkForPowerPill() {
+        Point pacmanPosition = getPacmanGridPosition();
+        char[][] grid = maze.getGrid();
+
+        if (grid[pacmanPosition.y][pacmanPosition.x] == 'o') {
+            grid[pacmanPosition.y][pacmanPosition.x] = ' '; // Power-Pille entfernen
+            activatePowerPillEffect(); // Aktivieren Sie den Effekt der Power-Pille
+            increaseScore(50); // Punktestand erhöhen
+
+        }
+    }
+
+    private void releaseGhostFromJail() {
+        for (Ghost ghost : ghosts) {
+            if (ghost.isInJail() && !ghost.isMovingToReleasePoint()) {
+                ghost.setIsMovingToReleasePoint(true);
+                break; // Nur einen Geist zur Zeit freilassen
+            }
+        }
+        nextGhostReleaseTime = System.currentTimeMillis() + GHOST_RELEASE_INTERVAL;
     }
 
     public List<Ghost> getGhosts() {
         return ghosts;
+    }
+
+    public boolean isAnyGhostMovingToReleasePoint() {
+        for (Ghost ghost : ghosts) {
+            if (ghost.isMovingToReleasePoint()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public ACTION getLastDirection() {
+        return lastDirection;
     }
 
 
@@ -377,6 +502,8 @@ public class Game_Controller implements Runnable{
         nextDirection = ACTION.MOVE_NONE;
         lives=3;
         score=0;
+        nextGhostReleaseTime = System.currentTimeMillis() + INITIAL_RELEASE_DELAY;
+
         Point PacManStart = maze.findPacmanStart();
         if (PacManStart != null) {
             this.pacman = new Pacman(PacManStart.x, PacManStart.y);
@@ -391,10 +518,10 @@ public class Game_Controller implements Runnable{
         Point speedyStart = maze.findGhostStart('S'); // Speedy, PINKY
         Point pokeyStart = maze.findGhostStart('C'); // CLYDE
         this.ghosts = new ArrayList<>();
-        this.ghosts.add(new Ghost(shadowStart.x, shadowStart.y, GhostType.SHADOW, GHOST_SPEED));
-        this.ghosts.add(new Ghost(speedyStart.x, speedyStart.y, GhostType.SPEEDY, GHOST_SPEED));
-        this.ghosts.add(new Ghost(pokeyStart.x, pokeyStart.y, GhostType.POKEY, GHOST_SPEED));
-        this.ghosts.add(new Ghost(bashfulStart.x, bashfulStart.y, GhostType.BASHFUL, GHOST_SPEED));
+        this.ghosts.add(new Ghost(shadowStart.x, shadowStart.y, GhostType.SHADOW, GHOST_SPEED, 'B'));
+        this.ghosts.add(new Ghost(speedyStart.x, speedyStart.y, GhostType.SPEEDY, GHOST_SPEED, 'S'));
+        this.ghosts.add(new Ghost(pokeyStart.x, pokeyStart.y, GhostType.POKEY, GHOST_SPEED, 'C'));
+        this.ghosts.add(new Ghost(bashfulStart.x, bashfulStart.y, GhostType.BASHFUL, GHOST_SPEED, 'I'));
 
     }
 
@@ -404,9 +531,14 @@ public class Game_Controller implements Runnable{
         lives = 3;
         lastDirection = ACTION.MOVE_NONE;
         nextDirection = ACTION.MOVE_NONE;
-        ghosts = new ArrayList<>();
-        // Optional: Pac-Man und das Labyrinth zurücksetzen !!!
-        // ...
+        nextGhostReleaseTime = System.currentTimeMillis() + INITIAL_RELEASE_DELAY;
+
+        // Setzen Sie das Labyrinth auf Level 0 und zurücksetzen Sie es
+        maze.changeLevel(0); // Ändern Sie das Labyrinth auf Level 0
+        maze.resetMaze(); // Setzen Sie das Labyrinth zurück, um alle Münzen wiederherzustellen
+
+        // Setzen Sie Pac-Man und die Geister auf ihre Startpositionen zurück
+        resetPacmanAndGhosts();
     }
 
     private void handleGameOver() {
@@ -449,18 +581,20 @@ public class Game_Controller implements Runnable{
             case PAUSE_TOGGLE -> {
                 if (state == GAMESTATE.PAUSED){
                     changeState(GAMESTATE.RUNNING);
+                    nextGhostReleaseTime += (System.currentTimeMillis() - pauseStartTime); // Zeit während der Pause hinzufügen
+                    pausedDuration = 0;
                 }else if (state == GAMESTATE.RUNNING){
                     changeState(GAMESTATE.PAUSED);
+                    pauseStartTime = System.currentTimeMillis(); // Startzeit der Pause speichern
                 }
             }
-            case MENU -> changeState(GAMESTATE.MENU);
+            case MENU -> {
+                changeState(GAMESTATE.MENU);
+                resetGame();
+            }
             case LOST -> {
                 changeState(GAMESTATE.GAMEOVER);
             }
-            case WIN -> {
-                changeState(GAMESTATE.GAMEOVER);
-            }
-
             case MOVE_UP -> {
                 nextDirection = ACTION.MOVE_UP;
                 if (!isCollision(ACTION.MOVE_UP)) {
@@ -503,7 +637,7 @@ public class Game_Controller implements Runnable{
             if (cell == 'T') {
                 // Teleportiere Pac-Man
                 gamePanel.triggerPortalBlink();
-                loseLife();
+                //loseLife();
                 if (pacmanPosition.x == 0) { // Linker Rand
                     pacman.setX((grid.length - 5) * cellSize); // Position am rechten Rand (minus 1 für Index, minus 1 für Rand)
                 } else if (pacmanPosition.x == grid.length - 4) { // Rechter Rand
@@ -584,6 +718,17 @@ public class Game_Controller implements Runnable{
             case MOVE_RIGHT:
                 movePacmanRight();
                 break;
+        }
+
+        collectCoin();
+    }
+
+    private void collectCoin() {
+        Point pacmanGridPosition = getPacmanGridPosition();
+        char[][] grid = maze.getGrid();
+        if (grid[pacmanGridPosition.y][pacmanGridPosition.x] == '.') {
+            grid[pacmanGridPosition.y][pacmanGridPosition.x] = ' '; // Münze entfernen
+            increaseScore(20); // Punktestand erhöhen
         }
     }
 
