@@ -13,6 +13,8 @@ public class GUI_Controller implements Runnable {
     private Main_Menu mMainMenu;
     private static Game_Panel mGame_Panel;
     private Pause_Menu mPauseMenu;
+    private GameOver_Panel mGameOverPanel;
+
 
     private Game_Controller mGame_C_Ref; // Referenz zum Gamecontroller
 
@@ -44,6 +46,7 @@ public class GUI_Controller implements Runnable {
         mMainMenu = new Main_Menu();
         mGame_Panel = new Game_Panel(mGame_C_Ref);
         mPauseMenu = new Pause_Menu();
+        mGameOverPanel = new GameOver_Panel();
 
         //Panels werden hinzugefügt und skaliert
         Container cp = window.getContentPane();
@@ -53,6 +56,8 @@ public class GUI_Controller implements Runnable {
         mGame_Panel.setBounds(0, 0, window.getWidth(), window.getHeight());
         cp.add(mPauseMenu,0);
         mPauseMenu.setBounds(0, 0, window.getWidth(), window.getHeight());
+        cp.add(mGameOverPanel);
+        mGameOverPanel.setBounds(0, 0, window.getWidth(), window.getHeight());
 
         //Tastatureingaben
         window.addKeyListener(new KeyAdapter() {
@@ -100,6 +105,9 @@ public class GUI_Controller implements Runnable {
                 mGame_Panel.requestFocusInWindow();
             }
             case PAUSED -> mPauseMenu.setVisible(true);
+            case GAMEOVER -> {
+                mGameOverPanel.setVisible(true);
+            }
         }
         window.repaint();
     }

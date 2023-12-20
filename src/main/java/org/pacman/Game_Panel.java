@@ -29,25 +29,79 @@ public class Game_Panel extends JPanel implements KeyListener {
     private long lastAnimationTime = 0;
     private static final long ANIMATION_INTERVAL = 100; // Zeit in Millisekunden zwischen den Animationsframes
 
+    private SpriteSheet pacmanSheet;
+    private SpriteSheet ghostSHADOWSheet;
+
+    private SpriteSheet ghostPOKEYSheet;
+    private SpriteSheet ghostSPEEDYSheet;
+    private SpriteSheet ghostBASHFULSheet;
+    private SpriteSheet ghostVULNERABLESheet;
+
+    private BufferedImage[] pacmanSprites;
+    private BufferedImage[] ghostSHADOWSprites;
+    private BufferedImage[] ghostPOKEYSprites;
+    private BufferedImage[] ghostSPEEDYSprites;
+    private BufferedImage[] ghostBASHFULSprites;
+    private BufferedImage[] ghostVULNERABLESprites;
+
+    // LEVEL Overlay
+    private boolean showLevelOverlay = false;
+    private String currentLevelText = "";
+    private long levelOverlayStartTime;
+    private static final long LEVEL_OVERLAY_DURATION = 1500;
+    private final Font customFont;
+
 
     Game_Panel(Game_Controller controller){
         this.gameController = controller;
         this.maze = gameController.getMaze();
+        customFont = FontLoader.loadFont("font/ArcadeClassic.ttf", 40);
 
         setDoubleBuffered(true);
 
         //setBackground(new Color(70, 70, 70));
         setBackground(new Color(0,0,0));
 
-        label = new JLabel("Game (ESC: Pause Menü)");
-        label.setBounds(100, 100, 100, 50);
-        label.setVisible(true);
-        label.setForeground(Color.orange);
-        add(label);
+        // label = new JLabel("Game (ESC: Pause Menü)");
+        // label.setBounds(100, 100, 100, 50);
+        // label.setVisible(true);
+        // label.setForeground(Color.orange);
+        // add(label);
 
         addKeyListener(this);
         setFocusable(true);
 
+        initSprites(); // Initialisieren der Sprites
+
+    }
+
+    private void initSprites() {
+        pacmanSheet = new SpriteSheet("/img/PacMan.png", 16);
+        ghostVULNERABLESheet = new SpriteSheet("/img/vulnerableGhost.png", 16);
+
+        ghostSHADOWSheet = SpriteSheet.getGhostSprite(GhostType.SHADOW);
+        ghostPOKEYSheet = SpriteSheet.getGhostSprite(GhostType.POKEY);
+        ghostSPEEDYSheet = SpriteSheet.getGhostSprite(GhostType.SPEEDY);
+        ghostBASHFULSheet = SpriteSheet.getGhostSprite(GhostType.BASHFUL);
+
+
+        // Laden der ersten Sprite-Bilder für jede SpriteSheet
+        pacmanSprites = new BufferedImage[8]; // Angenommen, es gibt 8 Animationsschritte
+        ghostSHADOWSprites = new BufferedImage[8];
+        ghostPOKEYSprites = new BufferedImage[8];
+        ghostSPEEDYSprites = new BufferedImage[8];
+        ghostBASHFULSprites = new BufferedImage[8];
+        ghostVULNERABLESprites = new BufferedImage[8];
+
+
+        for (int i = 0; i < 8; i++) {
+            pacmanSprites[i] = pacmanSheet.getSprite(i);
+            ghostSHADOWSprites[i] = ghostSHADOWSheet.getSprite(i);
+            ghostPOKEYSprites[i] = ghostPOKEYSheet.getSprite(i);
+            ghostSPEEDYSprites[i] = ghostSPEEDYSheet.getSprite(i);
+            ghostBASHFULSprites[i] = ghostBASHFULSheet.getSprite(i);
+            ghostVULNERABLESprites[i] = ghostVULNERABLESheet.getSprite(i);
+        }
     }
 
 
@@ -63,7 +117,6 @@ public class Game_Panel extends JPanel implements KeyListener {
             animationIndex = (animationIndex + 1) % 8; // Es gibt 4 Sprites für die Animation
             lastAnimationTime = currentTime;
         }
-
 
 
         // Berechnen der Größe einer einzelnen Zelle basierend auf der Fenstergröße
@@ -98,8 +151,7 @@ public class Game_Panel extends JPanel implements KeyListener {
             int pacmanY = startY + pacman.getY();
 
             // -- IMG
-            SpriteSheet sheet = new SpriteSheet("/img/PacMan.png", 16);
-            BufferedImage pacmanSprite = sheet.getSprite(animationIndex);
+            BufferedImage pacmanSprite = pacmanSheet.getSprite(animationIndex);
             Game_Controller.ACTION pacmanDirection = gameController.getLastDirection();
             // Rotieren des Sprites basierend auf der Richtung
             double rotationAngle = 0;
@@ -143,17 +195,90 @@ public class Game_Panel extends JPanel implements KeyListener {
 
         // Score und Lives oberhalb des Labyrinths zeichnen
         g.setColor(Color.WHITE);
-        g.setFont(new Font("Arial", Font.BOLD, 16)); // Setzen Sie die Schriftart und -größe
+        g.setFont(customFont); // Setzen Sie die Schriftart und -größe
         int scoreY = 30; // Y-Position für Score und Lives
-        g.drawString("Score: " + gameController.getScore(), startX, scoreY);
+        g.drawString("Score  " + gameController.getScore(), startX, scoreY);
         // Zeichnen der Leben als Kreise
-        int livesX = startX + 100; // X-Position für die Leben
-        int livesY = scoreY - 10;  // Y-Position für die Leben
-        int circleDiameter = cellSize/2;   // Durchmesser der Kreise
+        int livesX = startX; // X-Position für die Leben
+        int livesY = scoreY + 10;  // Y-Position für die Leben
+        int circleDiameter = (int) (cellSize*.75);   // Durchmesser der Kreise
+        BufferedImage pacmanSprite = pacmanSheet.getSprite(animationIndex);
         for (int i = 0; i < gameController.getLives(); i++) {
-            g.setColor(Color.YELLOW);
-            g.fillOval(livesX + i * (circleDiameter + 5), livesY, circleDiameter, circleDiameter);
+            // g.setColor(Color.YELLOW);
+            // g.fillOval(livesX + i * (circleDiameter + 5), livesY, circleDiameter, circleDiameter);
+            // Skalieren des Sprites auf die Zellengröße
+            Image scaledSprite = pacmanSprite.getScaledInstance(circleDiameter, circleDiameter, Image.SCALE_SMOOTH);
+
+            g.drawImage(scaledSprite, livesX + i * (circleDiameter + 5), livesY, this);
         }
+
+        //
+        // Draw the current level at the top right corner
+        int currentLevel = gameController.getMaze().getCurrentLevel() +1;
+        String levelText = "Level " + currentLevel;
+        g.setColor(Color.WHITE); // Set text color
+        g.setFont(customFont); // Use the custom font
+
+        // Get metrics from the graphics
+        FontMetrics metrics = g.getFontMetrics(customFont);
+        int levelTextWidth = metrics.stringWidth(levelText);
+
+        // Berechnen der x-Position für die rechte Ausrichtung innerhalb des Labyrinths
+        int x = startX + mazeWidth - levelTextWidth; // 10 Pixel vom rechten Rand des Labyrinths
+        int y = metrics.getAscent(); // y-Position basierend auf der Schriftart
+        g.drawString(levelText, x, y);
+
+        // Progress bar
+        // Calculate and draw the progress bar
+        float progress = gameController.getProgress();
+
+        int progressBarHeight = 8; // Height of the progress bar
+        int progressBarY = y + 5; // A little space below the level text
+
+        // Background of the progress bar
+        g.setColor(Color.DARK_GRAY);
+        g.fillRect(x, progressBarY, levelTextWidth, progressBarHeight);
+
+        // Foreground (progress)
+        g.setColor(Color.GREEN);
+        int progressWidth = (int) (progress * levelTextWidth);
+        g.fillRect(x, progressBarY, progressWidth, progressBarHeight);
+
+        //
+
+        // Level Overlay
+        if (showLevelOverlay) {
+            drawLevelOverlay(g);
+        }
+    }
+
+    private void drawLevelOverlay(Graphics g) {
+        if (System.currentTimeMillis() - levelOverlayStartTime > LEVEL_OVERLAY_DURATION) {
+            showLevelOverlay = false; // Overlay automatisch ausblenden
+            return;
+        }
+
+        // Overlay-Zeichnungslogik
+        g.setColor(new Color(0, 0, 0, 128)); // Halbtransparenter schwarzer Hintergrund
+        g.fillRect(0, 0, getWidth(), getHeight());
+        g.setColor(Color.WHITE);
+        g.setFont(customFont);
+        FontMetrics fm = g.getFontMetrics();
+        int textWidth = fm.stringWidth(currentLevelText);
+        int x = (getWidth() - textWidth) / 2;
+        int y = (getHeight() / 2) + fm.getMaxAscent() / 2;
+        g.drawString(currentLevelText, x, y);
+    }
+
+    public void showLevelOverlay(int level) {
+        if (level == 1) {
+            currentLevelText = "READY!";
+
+        }else{
+            currentLevelText = "Level " + level;
+        }
+        showLevelOverlay = true;
+        levelOverlayStartTime = System.currentTimeMillis();
     }
 
 
@@ -184,14 +309,31 @@ public class Game_Panel extends JPanel implements KeyListener {
 
     private void drawGhosts(Graphics g, int startX, int startY, int cellSize) {
         for (Ghost ghost : gameController.getGhosts()) {
-            SpriteSheet ghostSheet = SpriteSheet.getGhostSprite(ghost);
-            SpriteSheet vulnerableghostSheet = SpriteSheet.getGhostSpritevulnerable();
 
-            BufferedImage ghostSprite = ghostSheet.getSprite(animationIndex);
-            BufferedImage vulnerableghostSprite = vulnerableghostSheet.getSprite(animationIndex);
+            BufferedImage ghostSprite;
+            // Entscheiden, welches SpriteSheet basierend auf dem Geistertyp verwendet werden soll
+            switch (ghost.getType()) {
+                case SHADOW:
+                    ghostSprite = ghostSHADOWSprites[animationIndex];
+                    break;
+                case POKEY:
+                    ghostSprite = ghostPOKEYSprites[animationIndex];
+                    break;
+                case SPEEDY:
+                    ghostSprite = ghostSPEEDYSprites[animationIndex];
+                    break;
+                case BASHFUL:
+                    ghostSprite = ghostBASHFULSprites[animationIndex];
+                    break;
+                default:
+                    ghostSprite = ghostSHADOWSprites[animationIndex]; // Standard-Sprite oder Fehlerbehandlung
+                    break;
+            }
 
+            // Skalieren des Sprites auf die Zellengröße
             Image scaledSprite = ghostSprite.getScaledInstance(cellSize, cellSize, Image.SCALE_SMOOTH);
-            Image scaledvulnerableghostSprite = vulnerableghostSprite.getScaledInstance(cellSize, cellSize, Image.SCALE_SMOOTH);
+
+            Image scaledvulnerableghostSprite = ghostVULNERABLESprites[animationIndex].getScaledInstance(cellSize, cellSize, Image.SCALE_SMOOTH);
 
             // Umrechnen der Geisterposition in Bildschirmkoordinaten
             int ghostX = ghost.getX() +startX;
@@ -227,7 +369,7 @@ public class Game_Panel extends JPanel implements KeyListener {
 
 
         int coinSize = cellSize / 5; // Größe der Coins
-        int killCoinSize = cellSize / 2; // Größe der KillCoins
+        int killCoinSize = (int) (cellSize * .8); // Größe der KillCoins
 
 
         for (int row = 0; row < grid.length; row++) {
@@ -265,9 +407,15 @@ public class Game_Panel extends JPanel implements KeyListener {
                     // Zentrieren der Killcoins in jeder Zelle
                     int killcoinX = startX + col * cellSize + cellSize / 2 - killCoinSize / 2;
                     int killcoinY = startY + row * cellSize + cellSize / 2 - killCoinSize / 2;
+                    SpriteSheet cookieSheet = SpriteSheet.getCookieSprite();
 
-                    g.setColor(Color.green);
-                    g.fillRect(killcoinX, killcoinY, killCoinSize, killCoinSize);
+                    BufferedImage cookieSprite = cookieSheet.getSprite(0);
+
+                    Image scaledSprite = cookieSprite.getScaledInstance(cellSize, cellSize, Image.SCALE_SMOOTH);
+
+                    g.drawImage(scaledSprite, killcoinX, killcoinY, killCoinSize, killCoinSize, null);
+                    //g.setColor(Color.green);
+                    // g.fillRect(killcoinX, killcoinY, killCoinSize, killCoinSize);
                 }
                 if (grid[row][col] == 'T') {
                     // Zeichne Teleport-Punkt

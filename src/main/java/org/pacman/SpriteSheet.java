@@ -19,14 +19,18 @@ public class SpriteSheet {
         this.tileSize = tileSize;
     }
 
+    public static SpriteSheet getCookieSprite() {
+        return new SpriteSheet("/img/cookie.png", 351);
+    }
+
     public BufferedImage getSprite(int index) {
         int x = index * tileSize % spriteSheet.getWidth();
         int y = (index * tileSize / spriteSheet.getWidth()) * tileSize;
         return spriteSheet.getSubimage(x, y, tileSize, tileSize);
     }
 
-    public static SpriteSheet getGhostSprite(Ghost ghost) {
-        SpriteSheet sheet = switch (ghost.getType()) {
+    public static SpriteSheet getGhostSprite(Game_Controller.GhostType ghosttype) {
+        SpriteSheet sheet = switch (ghosttype) {
             case SHADOW -> // Blinky
                     new SpriteSheet("/img/blueGhost.png", 16);
             case SPEEDY -> // Pinky

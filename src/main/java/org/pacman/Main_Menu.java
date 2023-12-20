@@ -24,7 +24,6 @@ public class Main_Menu extends JPanel {
         // Customize button appearance
         customizeButton(start, customFont);
         customizeButton(highScores, customFont);
-        customizeButton(settings, customFont);
         customizeButton(quit, customFont);
 
         // Set the background color of the JPanel to black
@@ -48,8 +47,6 @@ public class Main_Menu extends JPanel {
         buttonPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         buttonPanel.add(highScores);
         buttonPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        buttonPanel.add(settings);
-        buttonPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         buttonPanel.add(quit);
         buttonPanel.add(Box.createVerticalGlue());
 
@@ -63,13 +60,11 @@ public class Main_Menu extends JPanel {
         // Add action listeners
         start.addActionListener(e -> Game_Controller.getGame_C_Ref().fireEvent(Game_Controller.ACTION.START));
         highScores.addActionListener(e -> Game_Controller.getGame_C_Ref().fireEvent(Game_Controller.ACTION.HIGH_SCORES));
-        settings.addActionListener(e -> Game_Controller.getGame_C_Ref().fireEvent(Game_Controller.ACTION.SETTINGS));
         quit.addActionListener(e -> System.exit(0)); // Exit the application
 
         // Add mouse listeners to handle button hover effect
         addHoverEffect(start);
         addHoverEffect(highScores);
-        addHoverEffect(settings);
         addHoverEffect(quit);
 
         setFocusable(false);

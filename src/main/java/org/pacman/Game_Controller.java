@@ -1,7 +1,6 @@
 /* Game_Controller.java */
 package org.pacman;
 
-import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,11 +40,16 @@ public class Game_Controller implements Runnable{
     private final Maze maze;
     private boolean mRunning = true;
     public static final int mTickrate = 1000 / 60; // Tickrate in 60 pro Sekunde
-    public static final int mTickrateMovement = 1000 / 20; // Tickrate PacMan
-    public static final int mTickrateMovementGhosts = 1000 / 16; // Tickrate Ghosts
+    public static int mTickrateMovement = 1000 / 20; // Tickrate PacMan
+    public static int mTickrateMovementGhosts = 1000 / 16; // Tickrate Ghosts
 
     // Konstanten für die Startpositionen und Geschwindigkeiten der Geister
     private int GHOST_SPEED = 0; // Geschwindigkeit der Geister
+
+    private int totalDots; // Total number of dots in the level
+    private int collectedDots = 0; // Number of collected dots
+    private int totalPpillscoins; // Total number of bitcoins in the level
+    private int collectedPpills = 0;
 
 
     private void continuousMovement() {
@@ -164,6 +168,7 @@ public class Game_Controller implements Runnable{
     private void activatePowerPillEffect() {
         for (Ghost ghost : ghosts) {
             ghost.setVulnerable(true);
+            ghost.setBlinking(false);
         }
         vulnerabilityDuration = VULNERABILITY_TIME;
     }
@@ -173,6 +178,8 @@ public class Game_Controller implements Runnable{
         // Setzen Sie Pac-Man und Geister auf ihre Startpositionen zurück
         pacman.setX(maze.findPacmanStart().x);
         pacman.setY(maze.findPacmanStart().y);
+        setLastDirection(ACTION.MOVE_NONE);
+        setNextDirection(ACTION.MOVE_NONE);
 
 
         for (Ghost ghost : ghosts) {
@@ -180,6 +187,7 @@ public class Game_Controller implements Runnable{
             ghost.setX(ghostStart.x);
             ghost.setY(ghostStart.y);
             ghost.setIsInJail(true);
+            ghost.setVulnerable(false);
         }
     }
 
@@ -392,8 +400,45 @@ public class Game_Controller implements Runnable{
             grid[pacmanPosition.y][pacmanPosition.x] = ' '; // Power-Pille entfernen
             activatePowerPillEffect(); // Aktivieren Sie den Effekt der Power-Pille
             increaseScore(50); // Punktestand erhöhen
+            collectedPpills++;
+            //checkLevelCompletion();
 
         }
+    }
+
+    private void checkLevelCompletion() {
+        //System.out.println(collectedDots+"/"+totalDots);
+        if (getProgress() == 1.0f) {
+            onLevelComplete();
+        }
+    }
+    // Method to calculate and return the progress as a float
+    public float getProgress() {
+        int totalItems = totalDots + totalPpillscoins;
+        int collectedItems = collectedDots + collectedPpills;
+
+        if (totalItems == 0) return 0; // Avoid division by zero
+        return (float) collectedItems / totalItems;
+    }
+
+    private void onLevelComplete() {
+        // nächstes level!
+        // wenn 3. Level geschafft, dann ende = win
+        int nextLevel = (maze.getCurrentLevel())+1;
+        maze.changeLevel(nextLevel);
+        gamePanel.showLevelOverlay(nextLevel+1);
+        totalDots = maze.getTotalDots();
+        totalPpillscoins = maze.getTotalPpills();
+        resetPacmanAndGhosts();
+        collectedDots=0;
+        collectedPpills=0;
+        updateTickratesForLevel(nextLevel);
+
+    }
+
+    private void updateTickratesForLevel(int nextLevel) {
+        mTickrateMovement = 1000 / (18+nextLevel);
+        mTickrateMovementGhosts = 1000 / (16+nextLevel*2);
     }
 
     private void releaseGhostFromJail() {
@@ -442,7 +487,6 @@ public class Game_Controller implements Runnable{
         PAUSE_TOGGLE,
         MENU,
         HIGH_SCORES,
-        SETTINGS,
         MOVE_UP,
         MOVE_DOWN,
         MOVE_LEFT,
@@ -498,18 +542,21 @@ public class Game_Controller implements Runnable{
 
     public void initializeGame() {
         System.out.println("GAME START");
+        updateTickratesForLevel(1);
         lastDirection = ACTION.MOVE_NONE;
         nextDirection = ACTION.MOVE_NONE;
         lives=3;
         score=0;
         nextGhostReleaseTime = System.currentTimeMillis() + INITIAL_RELEASE_DELAY;
 
+        totalDots = maze.getTotalDots();
+        totalPpillscoins = maze.getTotalPpills();
+        collectedDots = 0;
+        collectedPpills = 0;
+
         Point PacManStart = maze.findPacmanStart();
         if (PacManStart != null) {
             this.pacman = new Pacman(PacManStart.x, PacManStart.y);
-            if (isCollision(ACTION.MOVE_RIGHT)){
-                this.pacman = new Pacman(PacManStart.x, PacManStart.y);
-            }
         }
 
         // Initialisieren der Geisterliste
@@ -525,7 +572,9 @@ public class Game_Controller implements Runnable{
 
     }
 
-    private void resetGame() {
+
+
+    void resetGame() {
         // Spiel zurücksetzen
         score = 0;
         lives = 3;
@@ -539,6 +588,7 @@ public class Game_Controller implements Runnable{
 
         // Setzen Sie Pac-Man und die Geister auf ihre Startpositionen zurück
         resetPacmanAndGhosts();
+        gamePanel.showLevelOverlay(0);
     }
 
     private void handleGameOver() {
@@ -546,7 +596,7 @@ public class Game_Controller implements Runnable{
         // Zurücksetzen des Spiels oder andere erforderliche Aktionen
         resetGame();
         // Wechseln zum Hauptmenü
-        changeState(GAMESTATE.MENU);
+        changeState(GAMESTATE.GAMEOVER);
     }
 
     /**
@@ -576,6 +626,7 @@ public class Game_Controller implements Runnable{
             case START -> {
                 changeState(GAMESTATE.RUNNING);
                 initializeGame();
+                gamePanel.showLevelOverlay(1);
             }
             case QUIT -> mRunning = false;
             case PAUSE_TOGGLE -> {
@@ -729,6 +780,9 @@ public class Game_Controller implements Runnable{
         if (grid[pacmanGridPosition.y][pacmanGridPosition.x] == '.') {
             grid[pacmanGridPosition.y][pacmanGridPosition.x] = ' '; // Münze entfernen
             increaseScore(20); // Punktestand erhöhen
+
+            collectedDots++; // Increment collected dots
+            checkLevelCompletion();
         }
     }
 
@@ -776,6 +830,9 @@ public class Game_Controller implements Runnable{
     public void setLastDirection(ACTION direction) {
         this.lastDirection = direction;
     }
+    public void setNextDirection(ACTION direction) {
+        this.nextDirection = direction;
+    }
 
     // Methoden zum Aktualisieren von Score und Lives
     public void increaseScore(int amount) {
@@ -785,7 +842,6 @@ public class Game_Controller implements Runnable{
     public void loseLife() {
         lives--;
         if (lives <= 0) {
-            changeState(GAMESTATE.GAMEOVER);
             handleGameOver();
         }
     }

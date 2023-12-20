@@ -18,6 +18,41 @@ public class Maze {
 
         grids = new char[][][] {
                 {
+                        // Layout für Level 2
+                        "############################".toCharArray(),
+                        "#......#............#......#".toCharArray(),
+                        "#.####.#.##########.#.####.#".toCharArray(),
+                        "#.####.#.##########.#.####.#".toCharArray(),
+                        "#o........................o#".toCharArray(),
+                        "###.##.#####.##.#####.##.###".toCharArray(),
+                        "###.##.#####.##.#####.##.###".toCharArray(),
+                        "###.##.#####.##.#####.##.###".toCharArray(),
+                        "T...##.......##.......##...T".toCharArray(),
+                        "###.#####.########.#####.###".toCharArray(),
+                        "  #.#####.########.##### #  ".toCharArray(),
+                        "  #......     R      .   #  ".toCharArray(),
+                        "  #.##### ###--### ##### #  ".toCharArray(),
+                        "  #.##### #      #   . # #  ".toCharArray(),
+                        "### ##.   # CBSI # ##. # ###".toCharArray(),
+                        "T  .  .## #      # ##.     T".toCharArray(),
+                        "###  #### ######## ##### ###".toCharArray(),
+                        "  #  ####    P     ####  #  ".toCharArray(),
+                        "  #   .      ##      .   #  ".toCharArray(),
+                        "######.##    ##    ##.######".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "#..........................#".toCharArray(),
+                        "############################".toCharArray()
+                },
+                {
+                        // Layout für Level 1
                         "############################".toCharArray(),
                         "#............##............#".toCharArray(),
                         "#.####.#####.##.#####.####.#".toCharArray(),
@@ -50,40 +85,7 @@ public class Maze {
                         "#..........................#".toCharArray(),
                         "############################".toCharArray()
                 },
-                {
-                        // Layout für Level 2
-                        "############################".toCharArray(),
-                        "#............##............#".toCharArray(),
-                        "#.####.#####.##.#####.####.#".toCharArray(),
-                        "#o####.#####.##.#####.####o#".toCharArray(),
-                        "#.####.#####.##.#####.####.#".toCharArray(),
-                        "T..........................T".toCharArray(),
-                        "#.####.##.########.##.####.#".toCharArray(),
-                        "#.####.##.########.##.####.#".toCharArray(),
-                        "#......##....##....##......#".toCharArray(),
-                        "######.##### ## #####.######".toCharArray(),
-                        "     #.##### ## #####.#     ".toCharArray(),
-                        "     #.##          ##.#     ".toCharArray(),
-                        "     #.## ######## ##.#     ".toCharArray(),
-                        "######.## #      # ##.######".toCharArray(),
-                        "T     .   # CBSI #   .     T".toCharArray(),
-                        "######.## #      # ##.######".toCharArray(),
-                        "     #.## ######## ##.#     ".toCharArray(),
-                        "     #.##    P     ##.#     ".toCharArray(), // 'P' als Startpunkt
-                        "     #.## ######## ##.#     ".toCharArray(),
-                        "######.## ######## ##.######".toCharArray(),
-                        "#............##............#".toCharArray(),
-                        "#.####.#####.##.#####.####.#".toCharArray(),
-                        "#.####.#####.##.#####.####.#".toCharArray(),
-                        "#o..##.......  .......##..o#".toCharArray(),
-                        "###.##.##.########.##.##.###".toCharArray(),
-                        "###.##.##.########.##.##.###".toCharArray(),
-                        "#......##....##....##......#".toCharArray(),
-                        "#.##########.##.##########.#".toCharArray(),
-                        "#.##########.##.##########.#".toCharArray(),
-                        "#..........................#".toCharArray(),
-                        "############################".toCharArray()
-                },
+
                 {
                         // Layout für Level 3
                         "############################".toCharArray(),
@@ -97,8 +99,8 @@ public class Maze {
                         "#......##....##....##......#".toCharArray(),
                         "######.##### ## #####.######".toCharArray(),
                         "     #.##### ## #####.#     ".toCharArray(),
-                        "     #.##          ##.#     ".toCharArray(),
-                        "     #.## ######## ##.#     ".toCharArray(),
+                        "     #.##     R    ##.#     ".toCharArray(),
+                        "     #.## ###--### ##.#     ".toCharArray(),
                         "######.## #      # ##.######".toCharArray(),
                         "T     .   #      #   .     T".toCharArray(),
                         "######.## #      # ##.######".toCharArray(),
@@ -237,4 +239,31 @@ public class Maze {
         return grid[gridY][gridX] == '#' || grid[gridY][gridX] == '-' || grid[gridY][gridX] == 'T';
     }
 
+    public int getTotalDots() {
+        int count = 0;
+        for (int y = 0; y < grid.length; y++) {
+            for (int x = 0; x < grid[y].length; x++) {
+                if (grid[y][x] == '.') {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    public int getTotalPpills() {
+        int count = 0;
+        for (int y = 0; y < grid.length; y++) {
+            for (int x = 0; x < grid[y].length; x++) {
+                if (grid[y][x] == 'o') {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    public int getCurrentLevel() {
+        return currentLevel;
+    }
 }
