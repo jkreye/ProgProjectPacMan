@@ -6,16 +6,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-
+/**
+ * Haupt-Controller für das Pac-Man-Spiel.
+ * Verwaltet die Spiellogik, den Zustand und die Interaktionen zwischen den Spielobjekten.
+ */
 public class Game_Controller implements Runnable{
     private static GUI_Controller  mGUI_C_Ref;
     private static Game_Controller  mGame_C_Ref;
-    private Game_Panel gamePanel;
-    private Thread gameThread;
-    private Thread movementThread, movementGhostsThread;
+    private final Game_Panel gamePanel;
+    private Thread gameThread, movementThread, movementGhostsThread;
+    private final Maze maze;
 
     private Pacman pacman;
-    private Random random = new Random();
     private List<Ghost> ghosts;
     private ACTION lastDirection = ACTION.MOVE_NONE;
     private ACTION nextDirection = ACTION.MOVE_NONE;
@@ -32,19 +34,13 @@ public class Game_Controller implements Runnable{
 
 
     private long pauseStartTime = 0;
-    private long pausedDuration = 0;
 
-    private Point releasePoint;
+    private Random random = new Random();;
 
-
-    private final Maze maze;
     private boolean mRunning = true;
     public static final int mTickrate = 1000 / 60; // Tickrate in 60 pro Sekunde
     public static int mTickrateMovement = 1000 / 20; // Tickrate PacMan
     public static int mTickrateMovementGhosts = 1000 / 16; // Tickrate Ghosts
-
-    // Konstanten für die Startpositionen und Geschwindigkeiten der Geister
-    private int GHOST_SPEED = 0; // Geschwindigkeit der Geister
 
     private int totalDots; // Total number of dots in the level
     private int collectedDots = 0; // Number of collected dots
@@ -52,72 +48,135 @@ public class Game_Controller implements Runnable{
     private int collectedPpills = 0;
 
 
+    /**
+     * Führt die kontinuierliche Bewegung von Pac-Man aus.
+     * Diese Methode läuft in einer Schleife, die so lange aktiv bleibt, wie das Spiel läuft (mRunning ist true).
+     * In jedem Durchlauf der Schleife wird überprüft, ob eine Bewegungsrichtung festgelegt ist und ob eine Kollision vorliegt.
+     * Wenn eine gültige Bewegungsrichtung vorhanden ist, wird Pac-Man bewegt. Anschließend pausiert der Thread für eine kurze Zeit,
+     * basierend auf der definierten Tickrate für Pac-Mans Bewegung (mTickrateMovement).
+     * Bei einer Unterbrechung des Threads wird eine Fehlermeldung ausgegeben und die Schleife beendet.
+     */
     private void continuousMovement() {
         while (mRunning) {
             try {
-                if (lastDirection != ACTION.MOVE_NONE && state != GAMESTATE.PAUSED) {
-                    if (nextDirection != ACTION.MOVE_NONE && !isCollision(nextDirection)) {
-                        lastDirection = nextDirection;
-                        nextDirection = ACTION.MOVE_NONE;
-                    }
-                    movePacman(lastDirection);
-                }
-
-
+                processMovement();
                 Thread.sleep(mTickrateMovement);
             } catch (InterruptedException e) {
-                // Unterbrechung behandeln, aber nicht neu auslösen
-                System.err.println("Movement thread interrupted");
+                Thread.currentThread().interrupt();
+                System.err.println("Movement thread interrupted: " + e.getMessage());
                 break;
             }
         }
     }
 
+    /**
+     * Verarbeitet die Bewegungslogik von Pac-Man.
+     * Überprüft die aktuelle und nächste Richtung und bewegt Pac-Man entsprechend,
+     * wenn das Spiel nicht pausiert ist und keine Kollision vorliegt.
+     */
+    private void processMovement() {
+        if (lastDirection != ACTION.MOVE_NONE && state != GAMESTATE.PAUSED) {
+            if (nextDirection != ACTION.MOVE_NONE && !isCollision(nextDirection)) {
+                lastDirection = nextDirection;
+                nextDirection = ACTION.MOVE_NONE;
+            }
+            movePacman(lastDirection);
+        }
+    }
+
+    /**
+     * Führt die kontinuierliche Bewegung der Geister aus.
+     * In dieser Methode wird in einer Schleife, die läuft, solange das Spiel aktiv ist (mRunning ist true), die Position der Geister aktualisiert.
+     * Die Aktualisierung erfolgt nur, wenn das Spiel nicht pausiert ist (state != GAMESTATE.PAUSED).
+     * Nach jeder Aktualisierung der Geisterpositionen pausiert der Thread für eine festgelegte Zeit,
+     * basierend auf der Tickrate für die Bewegung der Geister (mTickrateMovementGhosts).
+     * Bei einer Unterbrechung des Threads wird der Thread-Status auf 'interrupted' gesetzt und eine Fehlermeldung ausgegeben.
+     */
     private void continuousMovementGhosts() {
         while (mRunning) {
             try {
                 if (state != GAMESTATE.PAUSED) {
                     updateGhostPositions();
                 }
-
                 Thread.sleep(mTickrateMovementGhosts);
             } catch (InterruptedException e) {
-                // Unterbrechung behandeln, aber nicht neu auslösen
-                System.err.println("Movement thread interrupted");
+                Thread.currentThread().interrupt();
+                System.err.println("Ghost movement thread interrupted: " + e.getMessage());
                 break;
             }
         }
     }
 
-    // Methode zum Auswählen einer zufälligen Richtung
+
+    /**
+     * Wählt eine zufällige Richtung für einen Geist aus, unter Berücksichtigung möglicher Kollisionen und der aktuellen Richtung.
+     * Richtungen, die zu einer Kollision führen oder direkt entgegengesetzt zur aktuellen Richtung sind, werden ausgeschlossen.
+     * Falls keine Richtung ohne Kollision möglich ist, wird die entgegengesetzte Richtung zur aktuellen Richtung gewählt.
+     *
+     * @param currentDirection Die aktuelle Bewegungsrichtung des Geistes.
+     * @param lghost Der Geist, für den die Richtung bestimmt wird.
+     * @return Die gewählte ACTION, die die neue Richtung des Geistes angibt.
+     */
     private ACTION getRandomDirection(ACTION currentDirection, Ghost lghost) {
         List<ACTION> possibleDirections = new ArrayList<>(Arrays.asList(
                 ACTION.MOVE_UP, ACTION.MOVE_DOWN, ACTION.MOVE_LEFT, ACTION.MOVE_RIGHT));
 
-        // Entfernen von Richtungen, die zu einer Kollision führen würden
-        possibleDirections.removeIf(direction -> isCollisionForGhost(lghost, direction)
-                || direction == getOppositeDirection(currentDirection));
+        removeInvalidDirections(possibleDirections, currentDirection, lghost);
 
-        // Wählen einer zufälligen verbleibenden Richtung
         if (!possibleDirections.isEmpty()) {
-            return possibleDirections.get(new Random().nextInt(possibleDirections.size()));
+            return possibleDirections.get(random.nextInt(possibleDirections.size()));
         }
 
-        // Wenn keine andere Richtung möglich ist, umkehren
         return getOppositeDirection(currentDirection);
     }
 
-    private ACTION getOppositeDirection(ACTION direction) {
-        switch (direction) {
-            case MOVE_UP: return ACTION.MOVE_DOWN;
-            case MOVE_DOWN: return ACTION.MOVE_UP;
-            case MOVE_LEFT: return ACTION.MOVE_RIGHT;
-            case MOVE_RIGHT: return ACTION.MOVE_LEFT;
-            default: return ACTION.MOVE_NONE;
+    /**
+     * Entfernt ungültige Bewegungsrichtungen aus der Liste der möglichen Richtungen für einen Geist.
+     * Eine Richtung gilt als ungültig, wenn sie zu einer Kollision mit einem Hindernis führen würde
+     * oder wenn sie direkt entgegengesetzt zur aktuellen Bewegungsrichtung des Geistes ist.
+     *
+     * @param possibleDirections Die Liste der möglichen Bewegungsrichtungen.
+     * @param currentDirection Die aktuelle Bewegungsrichtung des Geistes.
+     * @param lghost Der Geist, für den die Bewegungsrichtungen überprüft werden.
+     */
+    private void removeInvalidDirections(List<ACTION> possibleDirections, ACTION currentDirection, Ghost lghost) {
+        if (possibleDirections == null || lghost == null) {
+            throw new IllegalArgumentException("Die Liste der möglichen Richtungen und der Geist dürfen nicht null sein.");
         }
+
+        possibleDirections.removeIf(direction ->
+                isCollisionForGhost(lghost, direction) || direction == getOppositeDirection(currentDirection)
+        );
     }
 
-    // Methode zum Aktualisieren der Position der Geister
+
+    /**
+     * Ermittelt die entgegengesetzte Bewegungsrichtung zu einer gegebenen Richtung.
+     * Diese Methode wird verwendet, um die Richtung zu bestimmen, in die sich ein Charakter umdrehen sollte.
+     * Zum Beispiel ist die entgegengesetzte Richtung zu MOVE_UP MOVE_DOWN.
+     *
+     * @param direction Die aktuelle Bewegungsrichtung.
+     * @return Die entgegengesetzte Bewegungsrichtung. Gibt MOVE_NONE zurück, falls die übergebene Richtung ungültig ist.
+     */
+    private ACTION getOppositeDirection(ACTION direction) {
+        return switch (direction) {
+            case MOVE_UP -> ACTION.MOVE_DOWN;
+            case MOVE_DOWN -> ACTION.MOVE_UP;
+            case MOVE_LEFT -> ACTION.MOVE_RIGHT;
+            case MOVE_RIGHT -> ACTION.MOVE_LEFT;
+            default -> ACTION.MOVE_NONE;
+        };
+    }
+
+
+    /**
+     * Aktualisiert die Positionen aller Geister im Spiel.
+     * Für jeden Geist, der sich nicht im Gefängnis befindet, wird überprüft, ob er sich an einer Kreuzung befindet,
+     * sich umdrehen soll oder auf eine Kollision zusteuert.
+     * Basierend auf diesen Prüfungen wird die Bewegungsrichtung des Geistes festgelegt und der Geist entsprechend bewegt.
+     * Die Methode berücksichtigt, ob der Geist in eine neue Richtung gehen, sich umdrehen oder bei einer Kollision
+     * eine zufällige neue Richtung wählen soll.
+     */
     private void updateGhostPositions() {
         for (Ghost ghost : ghosts) {
             if (!ghost.isInJail()) {
@@ -126,16 +185,19 @@ public class Game_Controller implements Runnable{
                 } else if (shouldTurnAround()) {
                     ghost.setDirection(getOppositeDirection(ghost.getDirection()));
                 } else if (isCollisionForGhost(ghost, ghost.getDirection())) {
-                    // Bei Kollision, wähle eine neue zufällige Richtung
                     ghost.setDirection(getRandomDirection(ghost.getDirection(), ghost));
                 }
-                // Bewege den Geist in die aktuelle Richtung
                 moveGhost(ghost, ghost.getDirection());
             }
         }
     }
 
-
+    /**
+     * Überprüft Kollisionen zwischen Pac-Man und allen Geistern im Spiel.
+     * Wenn Pac-Man einen Geist berührt, wird abhängig vom Zustand des Geistes eine entsprechende Aktion ausgeführt.
+     * Bei Berührung mit einem verwundbaren Geist wird dieser zurück zum Startpunkt gesetzt und ist nicht mehr verwundbar.
+     * Bei einer Kollision mit einem nicht-verwundbaren Geist verliert Pac-Man ein Leben, und das Spiel wird zurückgesetzt.
+     */
     private void checkPacmanGhostCollision() {
         if (pacman != null) {
             for (Ghost ghost : ghosts) {
@@ -143,21 +205,9 @@ public class Game_Controller implements Runnable{
                         Math.abs(pacman.getY() - ghost.getY()) < Maze.getCellSize()) {
 
                     if (ghost.getVulnerable()) {
-                        // Zurücksetzen des Geistes zum Spawnpoint
-                        Point ghostStart = maze.findGhostStart(ghost.getLetter());
-                        ghost.setX(ghostStart.x);
-                        ghost.setY(ghostStart.y);
-                        ghost.setIsInJail(true);
-                        ghost.setVulnerable(false);
-                        // Zurücksetzen des Timers für die Geisterfreilassung
-                        nextGhostReleaseTime = System.currentTimeMillis() + GHOST_RELEASE_INTERVAL;
+                        resetVulnerableGhost(ghost);
                     } else {
-                        // Kollision mit nicht-verwundbarem Geist
-                        loseLife();
-                        resetPacmanAndGhosts();
-
-                        lastDirection = ACTION.MOVE_NONE;
-                        nextDirection = ACTION.MOVE_NONE;
+                        handleCollisionWithInvulnerableGhost();
                         break; // Unterbrechen der Schleife, da die Kollision bereits behandelt wird
                     }
                 }
@@ -165,23 +215,69 @@ public class Game_Controller implements Runnable{
         }
     }
 
-    private void activatePowerPillEffect() {
-        for (Ghost ghost : ghosts) {
-            ghost.setVulnerable(true);
-            ghost.setBlinking(false);
-        }
-        vulnerabilityDuration = VULNERABILITY_TIME;
+    /**
+     * Setzt einen verwundbaren Geist nach einer Kollision mit Pac-Man zurück.
+     * Der Geist wird zum Startpunkt zurückgesetzt, ist nicht mehr verwundbar und wird ins "Gefängnis" geschickt.
+     * Zusätzlich wird der Timer für die nächste Geisterfreilassung zurückgesetzt.
+     *
+     * @param ghost Der verwundbare Geist, der zurückgesetzt werden soll.
+     */
+    private void resetVulnerableGhost(Ghost ghost) {
+        Point ghostStart = maze.findGhostStart(ghost.getLetter());
+        ghost.setX(ghostStart.x);
+        ghost.setY(ghostStart.y);
+        ghost.setIsInJail(true);
+        ghost.setVulnerable(false);
+        nextGhostReleaseTime = System.currentTimeMillis() + GHOST_RELEASE_INTERVAL;
     }
 
-    // Bei Kollision Ghost + Pacman
+    /**
+     * Behandelt die Kollision zwischen Pac-Man und einem nicht-verwundbaren Geist.
+     * In der Regel verliert Pac-Man dabei ein Leben. Das Spiel wird daraufhin zurückgesetzt,
+     * und alle Bewegungsrichtungen werden auf MOVE_NONE gesetzt.
+     */
+    private void handleCollisionWithInvulnerableGhost() {
+        loseLife();
+        resetPacmanAndGhosts();
+        lastDirection = ACTION.MOVE_NONE;
+        nextDirection = ACTION.MOVE_NONE;
+    }
+
+
+    /**
+     * Aktiviert den Effekt einer Power-Pille.
+     * Alle Geister im Spiel werden für eine festgelegte Zeitdauer verwundbar.
+     * Während dieser Zeit können die Geister von Pac-Man gefangen werden.
+     * Setzt auch die Dauer der Verwundbarkeit der Geister auf einen festgelegten Wert.
+     */
+    private void activatePowerPillEffect() {
+        if (ghosts != null && !ghosts.isEmpty()) {
+            for (Ghost ghost : ghosts) {
+                ghost.setVulnerable(true);
+                ghost.setBlinking(false);
+            }
+            vulnerabilityDuration = VULNERABILITY_TIME;
+        } else {
+            System.err.println("Warnung: Keine Geister vorhanden, um den Power-Pill-Effekt zu aktivieren.");
+        }
+    }
+
+
+    /**
+     * Setzt Pac-Man und alle Geister auf ihre jeweiligen Startpositionen zurück.
+     * Diese Methode wird aufgerufen, wenn eine Kollision zwischen Pac-Man und einem nicht-verwundbaren Geist auftritt.
+     * Sie setzt die Position von Pac-Man zurück, initialisiert seine Bewegungsrichtung neu und
+     * setzt jeden Geist auf seine Anfangsposition, macht ihn nicht mehr verwundbar und setzt ihn ins "Gefängnis".
+     */
     private void resetPacmanAndGhosts() {
-        // Setzen Sie Pac-Man und Geister auf ihre Startpositionen zurück
-        pacman.setX(maze.findPacmanStart().x);
-        pacman.setY(maze.findPacmanStart().y);
+        // Setze Pac-Man zurück
+        Point pacmanStart = maze.findPacmanStart();
+        pacman.setX(pacmanStart.x);
+        pacman.setY(pacmanStart.y);
         setLastDirection(ACTION.MOVE_NONE);
         setNextDirection(ACTION.MOVE_NONE);
 
-
+        // Setze jeden Geist zurück
         for (Ghost ghost : ghosts) {
             Point ghostStart = maze.findGhostStart(ghost.getLetter());
             ghost.setX(ghostStart.x);
@@ -191,81 +287,86 @@ public class Game_Controller implements Runnable{
         }
     }
 
-    //--
     private boolean isAtIntersection(Ghost ghost) {
         int availableDirections = 0;
-        List<ACTION> possibleDirections = new ArrayList<>();
 
         // Liste der gültigen Bewegungsrichtungen
         List<ACTION> movementDirections = Arrays.asList(ACTION.MOVE_UP, ACTION.MOVE_DOWN, ACTION.MOVE_LEFT, ACTION.MOVE_RIGHT);
 
         // Prüfe jede Richtung, außer der entgegengesetzten Richtung des Geistes
         for (ACTION direction : movementDirections) {
-            // Überspringe die entgegengesetzte Richtung und Nicht-Bewegung
+            // Überspringe die entgegengesetzte Richtung
             if (direction == getOppositeDirection(ghost.getDirection())) {
                 continue;
             }
-
             // Simuliere die Bewegung in dieser Richtung
-
-            // Zähle die Richtungen, die keine Kollision verursachen
             if (!isCollisionForGhost(ghost, direction)) {
+                // Zähle die Richtungen, die keine Kollision verursachen
                 availableDirections++;
             }
         }
-        // System.out.println(availableDirections);
-
         // Eine Kreuzung liegt vor, wenn es mehr als eine verfügbare Richtung gibt
         return availableDirections > 1;
     }
 
-
+    /**
+     * Wählt an einer Kreuzung eine neue Richtung für den Geist aus.
+     * Zuerst wird überprüft, ob die Fortsetzung in der aktuellen Richtung möglich ist, ohne eine Kollision zu riskieren.
+     * Es besteht eine 30%ige Chance, dass der Geist in seiner aktuellen Richtung weitergeht. Andernfalls
+     * werden andere mögliche Richtungen, die keine Kollision verursachen, in Betracht gezogen und eine davon zufällig gewählt.
+     *
+     * @param ghost Der Geist, für den die Richtung bestimmt wird.
+     * @return Die gewählte Richtung, in die der Geist gehen soll.
+     */
     private ACTION chooseDirectionAtIntersection(Ghost ghost) {
         List<ACTION> possibleDirections = new ArrayList<>();
-        List<ACTION> movementDirections = Arrays.asList(ACTION.MOVE_UP, ACTION.MOVE_DOWN, ACTION.MOVE_LEFT, ACTION.MOVE_RIGHT);
-        Random random = new Random();
+        List<ACTION> movementDirections = Arrays.asList(
+                ACTION.MOVE_UP, ACTION.MOVE_DOWN, ACTION.MOVE_LEFT, ACTION.MOVE_RIGHT);
 
-        // Überprüfen, ob eine Fortsetzung in der aktuellen Richtung möglich ist
+        // Füge die aktuelle Richtung als Option hinzu, wenn keine Kollision vorliegt
         if (!isCollisionForGhost(ghost, ghost.getDirection())) {
-            // Entscheiden, ob der Geist geradeaus weitergeht (30 % Chance)
-            if (random.nextInt(100) < 30) {
-                return ghost.getDirection();
-            }
-            // Füge die aktuelle Richtung trotzdem als Option hinzu
             possibleDirections.add(ghost.getDirection());
         }
 
-        // Überprüfen Sie andere Richtungen, ohne die entgegengesetzte Richtung zu berücksichtigen
         for (ACTION direction : movementDirections) {
-            if (direction == ACTION.MOVE_NONE || direction == getOppositeDirection(ghost.getDirection())) {
-                continue;
-            }
-
-            // Simuliere die Bewegung in dieser Richtung
-            if (!isCollisionForGhost(ghost, direction)) {
+            if (direction != getOppositeDirection(ghost.getDirection()) &&
+                    !isCollisionForGhost(ghost, direction)) {
                 possibleDirections.add(direction);
             }
         }
 
-        // Wähle eine zufällige Richtung aus den verbleibenden möglichen Richtungen
         if (!possibleDirections.isEmpty()) {
-            int randomIndex = random.nextInt(possibleDirections.size());
-            return possibleDirections.get(randomIndex);
+            // Entscheiden, ob der Geist in der aktuellen Richtung weitergeht oder eine neue Richtung wählt
+            return random.nextInt(100) < 30 && possibleDirections.contains(ghost.getDirection()) ?
+                    ghost.getDirection() :
+                    possibleDirections.get(random.nextInt(possibleDirections.size()));
         }
 
-        return ghost.getDirection(); // Behalte die aktuelle Richtung bei, falls keine andere möglich ist
+        return ghost.getDirection();
     }
 
-
-
+    /**
+     * Entscheidet zufällig, ob ein Geist sich umdrehen soll.
+     * Die Entscheidung basiert auf einem Zufallswert: Es gibt eine 0,4% Chance (4 in 1000)
+     *
+     * @return true, wenn der Geist sich umdrehen soll, sonst false.
+     */
     private boolean shouldTurnAround() {
-        // Bestimmen Sie einen zufälligen Wert
         return new Random().nextInt(1000) < 4;
     }
-    //--
 
-    // Methode zum Bewegen eines Geistes
+
+    /**
+     * Bewegt einen Geist in die angegebene Richtung.
+     * Diese Methode ändert die Position des Geistes basierend auf der übergebenen Richtung.
+     *
+     * @param ghost Der Geist, der bewegt werden soll.
+     * @param direction Die Richtung, in die der Geist bewegt werden soll.
+     */
     private void moveGhost(Ghost ghost, ACTION direction) {
+        if (ghost == null || direction == null) {
+            throw new IllegalArgumentException("Geist und Richtung dürfen nicht null sein.");
+        }
         switch (direction) {
             case MOVE_UP:
                 ghost.moveUp();
@@ -565,6 +666,9 @@ public class Game_Controller implements Runnable{
         Point speedyStart = maze.findGhostStart('S'); // Speedy, PINKY
         Point pokeyStart = maze.findGhostStart('C'); // CLYDE
         this.ghosts = new ArrayList<>();
+        // Konstanten für die Startpositionen und Geschwindigkeiten der Geister
+        // Geschwindigkeit der Geister
+        int GHOST_SPEED = 0;
         this.ghosts.add(new Ghost(shadowStart.x, shadowStart.y, GhostType.SHADOW, GHOST_SPEED, 'B'));
         this.ghosts.add(new Ghost(speedyStart.x, speedyStart.y, GhostType.SPEEDY, GHOST_SPEED, 'S'));
         this.ghosts.add(new Ghost(pokeyStart.x, pokeyStart.y, GhostType.POKEY, GHOST_SPEED, 'C'));
@@ -633,7 +737,6 @@ public class Game_Controller implements Runnable{
                 if (state == GAMESTATE.PAUSED){
                     changeState(GAMESTATE.RUNNING);
                     nextGhostReleaseTime += (System.currentTimeMillis() - pauseStartTime); // Zeit während der Pause hinzufügen
-                    pausedDuration = 0;
                 }else if (state == GAMESTATE.RUNNING){
                     changeState(GAMESTATE.PAUSED);
                     pauseStartTime = System.currentTimeMillis(); // Startzeit der Pause speichern
