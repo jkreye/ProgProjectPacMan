@@ -726,9 +726,6 @@ public class Game_Controller implements Runnable{
         mGUI_C_Ref = new GUI_Controller(this);
         this.gamePanel = GUI_Controller.getGamePanel();
 
-        // Initialisieren von Pacman
-        initializePacman();
-
         // Starten des Hauptspiel-Loops
         gameThread = new Thread(this);
         gameThread.start();
