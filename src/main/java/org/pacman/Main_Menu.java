@@ -8,7 +8,6 @@ import java.awt.event.MouseEvent;
 public class Main_Menu extends JPanel {
     private JButton start = new JButton("Start Game");
     private JButton highScores = new JButton("High Scores");
-    private JButton settings = new JButton("Settings");
     private JButton quit = new JButton("Quit");
 
 
