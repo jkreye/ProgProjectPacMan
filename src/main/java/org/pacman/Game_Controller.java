@@ -31,7 +31,7 @@ public class Game_Controller implements Runnable{
     private static final long GHOST_RELEASE_INTERVAL = 5000; // 5 Sekunden in Millisekunden
     private static final long INITIAL_RELEASE_DELAY = 1000; // 1 Sekunde in Millisekunden
     private static final long BLINK_THRESHOLD = 2000; // Blinken beginnt 2 Sekunden vor Ende der Verwundbarkeit
-
+    private static final int OFFSET = 4; // Ein Viertel der Zellengröße als Versatz
 
     private long pauseStartTime = 0;
 
@@ -199,8 +199,9 @@ public class Game_Controller implements Runnable{
      * Bei einer Kollision mit einem nicht-verwundbaren Geist verliert Pac-Man ein Leben, und das Spiel wird zurückgesetzt.
      */
     private void checkPacmanGhostCollision() {
+        List<Ghost> ghostsCopy = new ArrayList<>(ghosts);
         if (pacman != null) {
-            for (Ghost ghost : ghosts) {
+            for (Ghost ghost : ghostsCopy) {
                 if (Math.abs(pacman.getX() - ghost.getX()) < Maze.getCellSize() &&
                         Math.abs(pacman.getY() - ghost.getY()) < Maze.getCellSize()) {
 
@@ -287,26 +288,36 @@ public class Game_Controller implements Runnable{
         }
     }
 
+
+    /**
+     * Überprüft, ob sich ein Geist an einer Kreuzung befindet.
+     * Eine Kreuzung wird als ein Punkt definiert, an dem der Geist mehr als eine mögliche Bewegungsrichtung hat,
+     * ohne mit einem Hindernis zu kollidieren. Die entgegengesetzte Richtung zur aktuellen Bewegungsrichtung des Geistes
+     * wird dabei nicht berücksichtigt, da ein Geist sich normalerweise nicht umdrehen sollte.
+     *
+     * @param ghost Der Geist, dessen Position überprüft wird.
+     * @return true, wenn sich der Geist an einer Kreuzung befindet, sonst false.
+     */
     private boolean isAtIntersection(Ghost ghost) {
+        if (ghost == null) {
+            throw new IllegalArgumentException("Geist darf nicht null sein.");
+        }
+
         int availableDirections = 0;
+        List<ACTION> movementDirections = Arrays.asList(
+                ACTION.MOVE_UP, ACTION.MOVE_DOWN, ACTION.MOVE_LEFT, ACTION.MOVE_RIGHT);
 
-        // Liste der gültigen Bewegungsrichtungen
-        List<ACTION> movementDirections = Arrays.asList(ACTION.MOVE_UP, ACTION.MOVE_DOWN, ACTION.MOVE_LEFT, ACTION.MOVE_RIGHT);
-
-        // Prüfe jede Richtung, außer der entgegengesetzten Richtung des Geistes
         for (ACTION direction : movementDirections) {
-            // Überspringe die entgegengesetzte Richtung
-            if (direction == getOppositeDirection(ghost.getDirection())) {
-                continue;
-            }
-            // Simuliere die Bewegung in dieser Richtung
-            if (!isCollisionForGhost(ghost, direction)) {
-                // Zähle die Richtungen, die keine Kollision verursachen
+            if (direction != getOppositeDirection(ghost.getDirection()) &&
+                    !isCollisionForGhost(ghost, direction)) {
                 availableDirections++;
+                if (availableDirections > 1) {
+                    return true; // Frühes Beenden, sobald mehr als eine Richtung verfügbar ist
+                }
             }
         }
-        // Eine Kreuzung liegt vor, wenn es mehr als eine verfügbare Richtung gibt
-        return availableDirections > 1;
+
+        return false; // Keine Kreuzung, wenn weniger als zwei Richtungen verfügbar sind
     }
 
     /**
@@ -383,42 +394,36 @@ public class Game_Controller implements Runnable{
         }
     }
 
+    /**
+     * Prüft, ob ein Geist bei einer Bewegung in eine bestimmte Richtung mit einem Hindernis kollidieren würde.
+     * Berechnet die zukünftige Position des Geistes basierend auf seiner aktuellen Geschwindigkeit und Richtung.
+     * Überprüft, ob an dieser Position ein Hindernis oder ein Teleport ist.
+     *
+     * @param ghost Der Geist, dessen Kollision überprüft wird.
+     * @param direction Die Richtung, in die der Geist sich bewegen soll.
+     * @return true, wenn eine Kollision erkannt wird, sonst false.
+     */
     private boolean isCollisionForGhost(Ghost ghost, ACTION direction) {
-        int cellSize = maze.getCellSize();
-        int speed = ghost.getSpeed(); // Angenommen, die Geister haben eine "speed"-Eigenschaft
-        int offset = 4; // Ein Viertel der Zellengröße als Versatz
-
-        // Bestimmen der zukünftigen Position basierend auf der Richtung
-        int futureX = ghost.getX();
-        int futureY = ghost.getY();
-
-        switch (direction) {
-            case MOVE_UP:
-                futureY -= speed;
-                break;
-            case MOVE_DOWN:
-                futureY += speed;
-                break;
-            case MOVE_LEFT:
-                futureX -= speed;
-                break;
-            case MOVE_RIGHT:
-                futureX += speed;
-                break;
+        if (ghost == null || direction == null) {
+            throw new IllegalArgumentException("Geist und Richtung dürfen nicht null sein.");
         }
+
+        int cellSize = maze.getCellSize();
+        int speed = ghost.getSpeed();
+
+        Point futurePosition = calculateFuturePosition(ghost.getX(), ghost.getY(), speed, direction);
 
         // Berechnen der vier Ecken um den Geist
         Point[] corners = new Point[] {
-                new Point(futureX + offset, futureY + offset), // Oben links
-                new Point(futureX + cellSize - offset, futureY + offset), // Oben rechts
-                new Point(futureX + offset, futureY + cellSize - offset), // Unten links
-                new Point(futureX + cellSize - offset, futureY + cellSize - offset) // Unten rechts
+                new Point(futurePosition.x + OFFSET, futurePosition.y + OFFSET), // Oben links
+                new Point(futurePosition.x + cellSize - OFFSET, futurePosition.y + OFFSET), // Oben rechts
+                new Point(futurePosition.x + OFFSET, futurePosition.y + cellSize - OFFSET), // Unten links
+                new Point(futurePosition.x + cellSize - OFFSET, futurePosition.y + cellSize - OFFSET) // Unten rechts
         };
 
         for (Point corner : corners) {
             int gridX = corner.x / cellSize;
             int gridY = corner.y / cellSize;
-            //System.out.println(gridX+" "+gridY);
 
             if (maze.isWallOrTeleportForGhost(gridX, gridY)) {
                 return true; // Kollision erkannt
@@ -428,9 +433,37 @@ public class Game_Controller implements Runnable{
         return false; // Keine Kollision
     }
 
+    /**
+     * Berechnet die zukünftige Position basierend auf der aktuellen Position, Geschwindigkeit und Bewegungsrichtung.
+     *
+     * @param x Die aktuelle X-Position.
+     * @param y Die aktuelle Y-Position.
+     * @param speed Die Geschwindigkeit des Geistes.
+     * @param direction Die Bewegungsrichtung.
+     * @return Die berechnete zukünftige Position.
+     */
+    private Point calculateFuturePosition(int x, int y, int speed, ACTION direction) {
+        switch (direction) {
+            case MOVE_UP:
+                return new Point(x, y - speed);
+            case MOVE_DOWN:
+                return new Point(x, y + speed);
+            case MOVE_LEFT:
+                return new Point(x - speed, y);
+            case MOVE_RIGHT:
+                return new Point(x + speed, y);
+            default:
+                return new Point(x, y);
+        }
+    }
+
 
     /**
-     * Gameloop für Spielelogik
+     * Haupt-Game-Loop des Spiels.
+     * Diese Methode wird kontinuierlich ausgeführt, solange das Spiel läuft (mRunning ist true).
+     * In jeder Iteration der Schleife wird überprüft, ob das Spiel pausiert ist.
+     * Wenn nicht, wird die Spiellogik aktualisiert und die Zeit für den nächsten Frame berechnet.
+     * Die Methode sorgt dafür, dass das Spiel mit einer konstanten Tickrate läuft.
      */
     @Override
     public void run() {
@@ -441,7 +474,7 @@ public class Game_Controller implements Runnable{
             long deltaTime = startTime - lastUpdateTime;
 
             if (state != GAMESTATE.PAUSED) {
-                updateGame(deltaTime); // Extrahiert die Spiellogik in eine separate Methode
+                updateGame(deltaTime); // Spiellogik
             }
 
             lastUpdateTime = startTime;
@@ -452,38 +485,44 @@ public class Game_Controller implements Runnable{
                 try {
                     Thread.sleep(sleepTime);
                 } catch (InterruptedException e) {
-                    System.err.println("Game thread interrupted");
-                    break; // Verlassen Sie die Schleife im Falle einer Unterbrechung
+                    Thread.currentThread().interrupt(); // Setzt den unterbrochenen Status des Threads
+                    System.err.println("Game thread interrupted: " + e.getMessage()); // Logging statt System.err
+                    break;
                 }
             }
         }
+
+        // Saubere Beendigung des Spiels
         mGUI_C_Ref.quit();
-        // Code für Speichern etc.
     }
 
+    /**
+     * Aktualisiert die Spiellogik für jeden Frame.
+     * Diese Methode wird regelmäßig im Spiel-Loop aufgerufen und führt verschiedene Aktionen aus,
+     * einschließlich Repaint des Spielfelds, Überprüfen von Kollisionen, Handhaben von Power-Pills und Teleportationen,
+     * sowie Aktualisieren des Zustands der Geister.
+     *
+     * @param deltaTime Die Zeit seit dem letzten Update in Millisekunden.
+     */
     private void updateGame(long deltaTime) {
         long currentTime = System.currentTimeMillis();
         gamePanel.repaint();
         checkAndTeleportPacman();
         checkPacmanGhostCollision();
         checkForPowerPill();
+
         if (currentTime >= nextGhostReleaseTime) {
             releaseGhostFromJail();
         }
 
+        if (ghosts != null) {
+            updateGhostStates(deltaTime);
+        }
+    }
+
+    private void updateGhostStates(long deltaTime) {
         if (vulnerabilityDuration > 0) {
-            vulnerabilityDuration -= deltaTime;
-            if (vulnerabilityDuration <= BLINK_THRESHOLD) {
-                for (Ghost ghost : ghosts) {
-                    ghost.setBlinking(true);
-                }
-            }
-            if (vulnerabilityDuration <= 0) {
-                for (Ghost ghost : ghosts) {
-                    ghost.setVulnerable(false);
-                    ghost.setBlinking(false);
-                }
-            }
+            updateVulnerabilityState(deltaTime);
         }
 
         for (Ghost ghost : ghosts) {
@@ -493,38 +532,75 @@ public class Game_Controller implements Runnable{
         }
     }
 
+    private void updateVulnerabilityState(long deltaTime) {
+        vulnerabilityDuration -= deltaTime;
+        if (vulnerabilityDuration <= BLINK_THRESHOLD) {
+            for (Ghost ghost : ghosts) {
+                ghost.setBlinking(true);
+            }
+        }
+        if (vulnerabilityDuration <= 0) {
+            for (Ghost ghost : ghosts) {
+                ghost.setVulnerable(false);
+                ghost.setBlinking(false);
+            }
+        }
+    }
+
+    /**
+     * Überprüft, ob Pac-Man eine Power-Pille aufgenommen hat.
+     * Wenn Pac-Man eine Power-Pille aufnimmt, wird der Effekt der Power-Pille aktiviert,
+     * der Punktestand erhöht und die Anzahl der gesammelten Power-Pillen aktualisiert.
+     */
     private void checkForPowerPill() {
         Point pacmanPosition = getPacmanGridPosition();
         char[][] grid = maze.getGrid();
 
         if (grid[pacmanPosition.y][pacmanPosition.x] == 'o') {
             grid[pacmanPosition.y][pacmanPosition.x] = ' '; // Power-Pille entfernen
-            activatePowerPillEffect(); // Aktivieren Sie den Effekt der Power-Pille
+            activatePowerPillEffect(); // Effekt der Power-Pille aktivieren
             increaseScore(50); // Punktestand erhöhen
             collectedPpills++;
-            //checkLevelCompletion();
-
+            checkLevelCompletion(); // Überprüfen, ob das Level abgeschlossen ist
         }
     }
 
+    /**
+     * Überprüft, ob das aktuelle Level abgeschlossen ist.
+     * Der Fortschritt wird anhand der Anzahl der gesammelten Punkte und der Gesamtzahl der Punkte im Level berechnet.
+     * Wenn der Fortschritt 100% erreicht, wird die Methode onLevelComplete aufgerufen, um zum nächsten Level überzugehen oder das Spiel zu beenden.
+     */
     private void checkLevelCompletion() {
-        //System.out.println(collectedDots+"/"+totalDots);
-        if (getProgress() == 1.0f) {
+        if (Math.abs(getProgress() - 1.0f) < 0.001f) {
             onLevelComplete();
         }
     }
-    // Method to calculate and return the progress as a float
+
+    /**
+     * Berechnet den Fortschritt im aktuellen Level des Spiels.
+     * Der Fortschritt wird als Verhältnis der gesammelten Gegenstände (Dots und Power-Pills)
+     * zur Gesamtzahl der Gegenstände im Level berechnet.
+     *
+     * @return Den Fortschritt als Gleitkommazahl zwischen 0 und 1,
+     *         wobei 1 den vollständigen Abschluss des Levels bedeutet.
+     */
     public float getProgress() {
         int totalItems = totalDots + totalPpillscoins;
         int collectedItems = collectedDots + collectedPpills;
 
-        if (totalItems == 0) return 0; // Avoid division by zero
+        if (totalItems == 0) return 0; // Vermeidung einer Division durch Null
         return (float) collectedItems / totalItems;
     }
 
+    /**
+     * Wird aufgerufen, wenn ein Level im Spiel abgeschlossen ist.
+     * Diese Methode setzt das Spiel für das nächste Level zurück,
+     * einschließlich der Aktualisierung des Labyrinths, der Anzeige des Level-Overlays,
+     * der Rücksetzung von Pac-Man und den Geistern sowie der Aktualisierung der Tickrate.
+     * Wenn das dritte Level abgeschlossen ist, wird das Spiel als gewonnen markiert.
+     */
     private void onLevelComplete() {
-        // nächstes level!
-        // wenn 3. Level geschafft, dann ende = win
+        // next level!
         int nextLevel = (maze.getCurrentLevel())+1;
         maze.changeLevel(nextLevel);
         gamePanel.showLevelOverlay(nextLevel+1);
@@ -534,14 +610,30 @@ public class Game_Controller implements Runnable{
         collectedDots=0;
         collectedPpills=0;
         updateTickratesForLevel(nextLevel);
-
     }
 
+    /**
+     * Aktualisiert die Tickraten für die Bewegungen von Pac-Man und den Geistern für das angegebene Level.
+     * Die Tickraten beginnen bei einer Basisrate und erhöhen sich mit jedem Level, um die Schwierigkeit zu steigern.
+     *
+     * @param nextLevel Das nächste Level, für das die Tickraten aktualisiert werden sollen.
+     */
     private void updateTickratesForLevel(int nextLevel) {
-        mTickrateMovement = 1000 / (18+nextLevel);
-        mTickrateMovementGhosts = 1000 / (16+nextLevel*2);
+        final int baseTickRatePacman = 19;
+        final int baseTickRateGhosts = 17;
+        final int levelFactor = 1; // Erhöhung der Geschwindigkeit pro Level
+
+        mTickrateMovement = 1000 / (baseTickRatePacman + levelFactor * (nextLevel - 1));
+        mTickrateMovementGhosts = 1000 / (baseTickRateGhosts + levelFactor * (nextLevel - 1));
     }
 
+
+    /**
+     * Lässt einen Geist aus dem Gefängnis frei, falls vorhanden.
+     * Geht die Liste der Geister durch und setzt den ersten Geist, der sich im Gefängnis befindet und noch nicht
+     * auf dem Weg zum Freilassungspunkt ist, auf den Weg zur Freilassung.
+     * Nachdem ein Geist freigelassen wurde, wird der Zeitpunkt für die nächste Geisterfreilassung aktualisiert.
+     */
     private void releaseGhostFromJail() {
         for (Ghost ghost : ghosts) {
             if (ghost.isInJail() && !ghost.isMovingToReleasePoint()) {
@@ -552,11 +644,21 @@ public class Game_Controller implements Runnable{
         nextGhostReleaseTime = System.currentTimeMillis() + GHOST_RELEASE_INTERVAL;
     }
 
+
     public List<Ghost> getGhosts() {
         return ghosts;
     }
 
+    /**
+     * Überprüft, ob sich mindestens ein Geist auf dem Weg zum Freilassungspunkt befindet.
+     * Durchläuft die Liste der Geister und prüft, ob irgendeiner von ihnen sich gerade zum Freilassungspunkt bewegt.
+     *
+     * @return true, wenn mindestens ein Geist auf dem Weg zum Freilassungspunkt ist, sonst false.
+     */
     public boolean isAnyGhostMovingToReleasePoint() {
+        if (ghosts == null) {
+            return false;
+        }
         for (Ghost ghost : ghosts) {
             if (ghost.isMovingToReleasePoint()) {
                 return true;
@@ -564,6 +666,7 @@ public class Game_Controller implements Runnable{
         }
         return false;
     }
+
 
     public ACTION getLastDirection() {
         return lastDirection;
@@ -613,41 +716,59 @@ public class Game_Controller implements Runnable{
         NONE // kann verwendet werden, wenn der Geist nicht in Bewegung ist
     }
 
-    Game_Controller(){
+    public Game_Controller() {
         // Initialisieren des Labyrinths
         this.maze = new Maze();
         initializeGame();
 
+        // Initialisieren der GUI und Zuweisung der Referenzen
         mGame_C_Ref = this;
         mGUI_C_Ref = new GUI_Controller(this);
         this.gamePanel = GUI_Controller.getGamePanel();
 
         // Initialisieren von Pacman
+        initializePacman();
 
-        //starten des Gameloop
+        // Starten des Hauptspiel-Loops
         gameThread = new Thread(this);
         gameThread.start();
 
-        // Initialisieren des Bewegungs-Threads Pacman
+        // Initialisieren und Starten der Bewegungs-Threads
         movementThread = new Thread(this::continuousMovement);
         movementThread.start();
-
-        // Initialisieren des Bewegungs-Threads Ghosts
         movementGhostsThread = new Thread(this::continuousMovementGhosts);
         movementGhostsThread.start();
 
-
-        //wechseln zum Menü
+        // Wechseln zum Menü
         changeState(GAMESTATE.MENU);
     }
 
+    /**
+     * Initialisiert Pac-Man mit Startwerten.
+     * Setzt die Startposition, Geschwindigkeit und andere relevante Eigenschaften von Pac-Man.
+     */
+    private void initializePacman() {
+        Point pacmanStart = maze.findPacmanStart();
+        if (pacmanStart != null) {
+            this.pacman = new Pacman(pacmanStart.x, pacmanStart.y);
+        } else {
+            // Fehlerbehandlung, falls keine Startposition gefunden wurde.
+            System.err.println("Startposition für Pac-Man konnte nicht gefunden werden.");
+        }
+    }
+
+
+
+    /**
+     * Initialisiert das Spiel, indem es alle relevanten Spielkomponenten und -variablen zurücksetzt.
+     * Setzt die Tickraten, Startpositionen von Pac-Man und den Geistern, die Spielvariablen wie Punktestand und Leben.
+     */
     public void initializeGame() {
-        System.out.println("GAME START");
         updateTickratesForLevel(1);
         lastDirection = ACTION.MOVE_NONE;
         nextDirection = ACTION.MOVE_NONE;
-        lives=3;
-        score=0;
+        lives = 3;
+        score = 0;
         nextGhostReleaseTime = System.currentTimeMillis() + INITIAL_RELEASE_DELAY;
 
         totalDots = maze.getTotalDots();
@@ -655,52 +776,67 @@ public class Game_Controller implements Runnable{
         collectedDots = 0;
         collectedPpills = 0;
 
-        Point PacManStart = maze.findPacmanStart();
-        if (PacManStart != null) {
-            this.pacman = new Pacman(PacManStart.x, PacManStart.y);
-        }
+        initializePacmanAndGhosts();
+    }
 
-        // Initialisieren der Geisterliste
-        Point shadowStart = maze.findGhostStart('B'); // BLINKY
-        Point bashfulStart = maze.findGhostStart('I'); // INKY
-        Point speedyStart = maze.findGhostStart('S'); // Speedy, PINKY
-        Point pokeyStart = maze.findGhostStart('C'); // CLYDE
+    private void initializePacmanAndGhosts() {
+        initializePacman();
+        initializeGhosts();
+    }
+
+    private void initializeGhosts() {
         this.ghosts = new ArrayList<>();
-        // Konstanten für die Startpositionen und Geschwindigkeiten der Geister
-        // Geschwindigkeit der Geister
-        int GHOST_SPEED = 0;
-        this.ghosts.add(new Ghost(shadowStart.x, shadowStart.y, GhostType.SHADOW, GHOST_SPEED, 'B'));
-        this.ghosts.add(new Ghost(speedyStart.x, speedyStart.y, GhostType.SPEEDY, GHOST_SPEED, 'S'));
-        this.ghosts.add(new Ghost(pokeyStart.x, pokeyStart.y, GhostType.POKEY, GHOST_SPEED, 'C'));
-        this.ghosts.add(new Ghost(bashfulStart.x, bashfulStart.y, GhostType.BASHFUL, GHOST_SPEED, 'I'));
+        int ghostSpeed = 0; // Konstante für die Geschwindigkeit der Geister
 
+        // Initialisieren der Geister an ihren Startpositionen
+        addGhostToGame('B', GhostType.SHADOW, ghostSpeed);
+        addGhostToGame('I', GhostType.BASHFUL, ghostSpeed);
+        addGhostToGame('S', GhostType.SPEEDY, ghostSpeed);
+        addGhostToGame('C', GhostType.POKEY, ghostSpeed);
+    }
+
+    private void addGhostToGame(char ghostChar, GhostType type, int speed) {
+        Point ghostStart = maze.findGhostStart(ghostChar);
+        if (ghostStart != null) {
+            this.ghosts.add(new Ghost(ghostStart.x, ghostStart.y, type, speed, ghostChar));
+        } else {
+            System.err.println("Startposition für Geist " + ghostChar + " nicht gefunden.");
+        }
     }
 
 
 
+    /**
+     * Setzt das Spiel auf den Anfangszustand zurück.
+     * Der Punktestand, die Anzahl der Leben, die Richtungen und der Zeitpunkt der nächsten Geisterfreilassung werden zurückgesetzt.
+     * Das Labyrinth wird auf das Anfangslevel gesetzt und zurückgesetzt, und Pac-Man sowie die Geister werden auf ihre Startpositionen zurückgesetzt.
+     */
     void resetGame() {
-        // Spiel zurücksetzen
         score = 0;
         lives = 3;
         lastDirection = ACTION.MOVE_NONE;
         nextDirection = ACTION.MOVE_NONE;
         nextGhostReleaseTime = System.currentTimeMillis() + INITIAL_RELEASE_DELAY;
 
-        // Setzen Sie das Labyrinth auf Level 0 und zurücksetzen Sie es
-        maze.changeLevel(0); // Ändern Sie das Labyrinth auf Level 0
-        maze.resetMaze(); // Setzen Sie das Labyrinth zurück, um alle Münzen wiederherzustellen
+        // Labyrinth auf Level 0 setzen und zurücksetzen
+        maze.changeLevel(0);
+        maze.resetMaze();
 
-        // Setzen Sie Pac-Man und die Geister auf ihre Startpositionen zurück
+        // Pac-Man und Geister zurücksetzen
         resetPacmanAndGhosts();
-        gamePanel.showLevelOverlay(0);
+        gamePanel.showLevelOverlay(0); // Zeigt das Level-Overlay für das Anfangslevel an
     }
 
+    /**
+     * Behandelt das Ereignis des Spielendes (Game Over).
+     * Setzt das Spiel zurück und wechselt zum Game-Over-Zustand oder zum Hauptmenü.
+     */
     private void handleGameOver() {
-        // Game Over Logik
-        // Zurücksetzen des Spiels oder andere erforderliche Aktionen
-        resetGame();
-        // Wechseln zum Hauptmenü
+        resetGame(); // Setzt das Spiel auf den Anfangszustand zurück
+
+        // Wechseln zum Game-Over-Bildschirm oder Hauptmenü
         changeState(GAMESTATE.GAMEOVER);
+
     }
 
     /**
@@ -713,10 +849,6 @@ public class Game_Controller implements Runnable{
         mGUI_C_Ref.changeWindowConfig(newState);
     }
 
-
-    public static GUI_Controller getGUI_C_Ref() {
-        return mGUI_C_Ref;
-    }
     public static Game_Controller getGame_C_Ref(){
         return mGame_C_Ref;
     }
@@ -730,6 +862,7 @@ public class Game_Controller implements Runnable{
             case START -> {
                 changeState(GAMESTATE.RUNNING);
                 initializeGame();
+                initializePacmanAndGhosts();
                 gamePanel.showLevelOverlay(1);
             }
             case QUIT -> mRunning = false;
@@ -777,87 +910,129 @@ public class Game_Controller implements Runnable{
         }
     }
 
-
+    /**
+     * Überprüft, ob Pac-Man auf einem Teleportationsfeld steht und teleportiert ihn bei Bedarf.
+     * Teleportiert Pac-Man zum gegenüberliegenden Rand des Labyrinths, wenn er sich auf einem Teleportationsfeld befindet.
+     */
     public void checkAndTeleportPacman() {
-
         if (this.pacman != null) {
             Point pacmanPosition = getPacmanGridPosition();
-
-
             char[][] grid = maze.getGrid();
             int cellSize = maze.getCellSize();
 
-            char cell = grid[pacmanPosition.y][pacmanPosition.x];
-            if (cell == 'T') {
-                // Teleportiere Pac-Man
-                gamePanel.triggerPortalBlink();
-                //loseLife();
-                if (pacmanPosition.x == 0) { // Linker Rand
-                    pacman.setX((grid.length - 5) * cellSize); // Position am rechten Rand (minus 1 für Index, minus 1 für Rand)
-                } else if (pacmanPosition.x == grid.length - 4) { // Rechter Rand
-                    pacman.setX(cellSize); // Position am linken Rand
+            // Prüfen, ob die Position von Pac-Man innerhalb der Grenzen des Grids liegt
+            if (pacmanPosition.y >= 0 && pacmanPosition.y < grid.length &&
+                    pacmanPosition.x >= 0 && pacmanPosition.x < grid[pacmanPosition.y].length) {
+                char cell = grid[pacmanPosition.y][pacmanPosition.x];
+
+                if (cell == 'T') {
+                    gamePanel.triggerPortalBlink(); // Auslösen des Blinkens am Portal
+                    teleportPacman(pacmanPosition, grid, cellSize);
                 }
             }
         }
-
-
     }
 
+    /**
+     * Teleportiert Pac-Man zum gegenüberliegenden Rand des Labyrinths.
+     * @param pacmanPosition Die aktuelle Position von Pac-Man.
+     * @param grid Das Labyrinth-Grid.
+     * @param cellSize Die Größe einer Zelle im Labyrinth.
+     */
+    private void teleportPacman(Point pacmanPosition, char[][] grid, int cellSize) {
+        if (pacmanPosition.x == 0) { // Linker Rand
+            pacman.setX((grid[0].length - 2) * cellSize); // Teleportieren zum rechten Rand
+        } else if (pacmanPosition.x == grid[0].length - 1) { // Rechter Rand
+            pacman.setX(cellSize); // Teleportieren zum linken Rand
+        }
+    }
+
+    /**
+     * Überprüft, ob eine Kollision zwischen Pac-Man und einer Wand bei einer bestimmten Bewegungsrichtung auftritt.
+     * Berechnet die zukünftige Position von Pac-Man basierend auf seiner aktuellen Geschwindigkeit und Richtung,
+     * und prüft, ob an dieser Position eine Wand im Labyrinth ist.
+     *
+     * @param action Die geplante Bewegungsrichtung von Pac-Man.
+     * @return true, wenn eine Kollision auftritt, sonst false.
+     */
     private boolean isCollision(ACTION action) {
         int cellSize = maze.getCellSize();
         int speed = pacman.getSpeed();
         int offset = cellSize / 4; // Ein Viertel der Zellengröße als Versatz
 
         // Bestimmen der zukünftigen Position basierend auf der Aktion
-        int futureX = pacman.getX();
-        int futureY = pacman.getY();
-
-        switch (action) {
-            case MOVE_UP:
-                futureY -= speed;
-                break;
-            case MOVE_DOWN:
-                futureY += speed;
-                break;
-            case MOVE_LEFT:
-                futureX -= speed;
-                break;
-            case MOVE_RIGHT:
-                futureX += speed;
-                break;
-        }
+        Point futurePosition = getFuturePosition(action, pacman.getX(), pacman.getY(), speed);
 
         // Berechnen der vier Ecken um Pac-Man
-        Point[] corners = new Point[] {
-                new Point(futureX + offset, futureY + offset), // Oben links
-                new Point(futureX + cellSize - offset, futureY + offset), // Oben rechts
-                new Point(futureX + offset, futureY + cellSize - offset), // Unten links
-                new Point(futureX + cellSize - offset, futureY + cellSize - offset) // Unten rechts
-        };
+        Point[] corners = getCorners(futurePosition, cellSize, offset);
 
+        // Überprüfen jeder Ecke auf Kollision
+        return checkCornersForCollision(corners, cellSize);
+    }
+
+    private Point getFuturePosition(ACTION action, int x, int y, int speed) {
+        switch (action) {
+            case MOVE_UP:    return new Point(x, y - speed);
+            case MOVE_DOWN:  return new Point(x, y + speed);
+            case MOVE_LEFT:  return new Point(x - speed, y);
+            case MOVE_RIGHT: return new Point(x + speed, y);
+            default:         return new Point(x, y);
+        }
+    }
+
+    private Point[] getCorners(Point position, int cellSize, int offset) {
+        int x = position.x;
+        int y = position.y;
+        return new Point[]{
+                new Point(x + offset, y + offset), // Oben links
+                new Point(x + cellSize - offset, y + offset), // Oben rechts
+                new Point(x + offset, y + cellSize - offset), // Unten links
+                new Point(x + cellSize - offset, y + cellSize - offset) // Unten rechts
+        };
+    }
+
+    private boolean checkCornersForCollision(Point[] corners, int cellSize) {
         for (Point corner : corners) {
             int gridX = corner.x / cellSize;
             int gridY = corner.y / cellSize;
-            // System.out.println("corn: "+gridX+" "+gridY);
 
             if (maze.isWall(gridX, gridY)) {
-                //System.out.println("kol: "+gridX+" "+gridY);
                 return true; // Kollision erkannt
             }
         }
-
         return false; // Keine Kollision
     }
 
+
+    /**
+     * Berechnet die Position von Pac-Man im Labyrinth-Gitter basierend auf seiner aktuellen Pixelposition.
+     * Diese Methode wandelt die Pixelkoordinaten von Pac-Man in Gitterkoordinaten um, indem sie die Pixelposition
+     * durch die Größe der Zellen im Labyrinth teilt.
+     *
+     * @return Ein Point-Objekt, das die Gitterposition von Pac-Man repräsentiert.
+     */
     public Point getPacmanGridPosition() {
         int cellSize = maze.getCellSize();
-        int adjustedX = (pacman.getX()) / cellSize;
-        int adjustedY = (pacman.getY()) / cellSize;
-        // System.out.println(adjustedX+" "+adjustedY);
+
+        // Stellen Sie sicher, dass cellSize nicht Null ist, um eine Division durch Null zu vermeiden
+        if (cellSize == 0) {
+            throw new IllegalStateException("Zellengröße des Labyrinths ist 0. Kann Gitterposition nicht berechnen.");
+        }
+
+        int adjustedX = pacman.getX() / cellSize;
+        int adjustedY = pacman.getY() / cellSize;
 
         return new Point(adjustedX, adjustedY);
     }
 
+
+    /**
+     * Bewegt Pac-Man in die angegebene Richtung und sammelt Münzen, falls vorhanden.
+     * Diese Methode aktualisiert die Position von Pac-Man basierend auf der angegebenen Aktion.
+     * Anschließend wird überprüft, ob Pac-Man eine Münze sammelt.
+     *
+     * @param action Die Bewegungsrichtung, in die Pac-Man bewegt werden soll.
+     */
     private synchronized void movePacman(ACTION action) {
         switch (action) {
             case MOVE_UP:
@@ -877,45 +1052,64 @@ public class Game_Controller implements Runnable{
         collectCoin();
     }
 
+    /**
+     * Überprüft, ob Pac-Man eine Münze an seiner aktuellen Position eingesammelt hat und aktualisiert den Spielstand.
+     * Entfernt die Münze aus dem Labyrinth und erhöht den Punktestand sowie die Anzahl der gesammelten Münzen.
+     * Überprüft zudem, ob das aktuelle Level abgeschlossen ist.
+     */
     private void collectCoin() {
         Point pacmanGridPosition = getPacmanGridPosition();
         char[][] grid = maze.getGrid();
-        if (grid[pacmanGridPosition.y][pacmanGridPosition.x] == '.') {
-            grid[pacmanGridPosition.y][pacmanGridPosition.x] = ' '; // Münze entfernen
-            increaseScore(20); // Punktestand erhöhen
 
-            collectedDots++; // Increment collected dots
-            checkLevelCompletion();
+        // Überprüfen, ob sich an der Position von Pac-Man eine Münze befindet
+        if (pacmanGridPosition.y >= 0 && pacmanGridPosition.y < grid.length &&
+                pacmanGridPosition.x >= 0 && pacmanGridPosition.x < grid[pacmanGridPosition.y].length &&
+                grid[pacmanGridPosition.y][pacmanGridPosition.x] == '.') {
+
+            grid[pacmanGridPosition.y][pacmanGridPosition.x] = ' '; // Münze entfernen
+            increaseScore(20); // Punktestand um 20 Punkte erhöhen
+            collectedDots++; // Anzahl der gesammelten Münzen erhöhen
+            checkLevelCompletion(); // Überprüfen, ob das Level abgeschlossen ist
         }
     }
 
+
+    /**
+     * Bewegt Pac-Man nach oben, wenn keine Kollision auftritt.
+     */
     private void movePacmanUp() {
-        // Logik für Bewegung nach oben
         if (!isCollision(ACTION.MOVE_UP)) {
             pacman.moveUp();
         }
     }
 
+    /**
+     * Bewegt Pac-Man nach unten, wenn keine Kollision auftritt.
+     */
     private void movePacmanDown() {
-        // Logik für Bewegung nach unten
         if (!isCollision(ACTION.MOVE_DOWN)) {
             pacman.moveDown();
         }
     }
 
+    /**
+     * Bewegt Pac-Man nach links, wenn keine Kollision auftritt.
+     */
     private void movePacmanLeft() {
-        // Logik für Bewegung nach links
         if (!isCollision(ACTION.MOVE_LEFT)) {
             pacman.moveLeft();
         }
     }
 
+    /**
+     * Bewegt Pac-Man nach rechts, wenn keine Kollision auftritt.
+     */
     private void movePacmanRight() {
-        // Logik für Bewegung nach rechts
         if (!isCollision(ACTION.MOVE_RIGHT)) {
             pacman.moveRight();
         }
     }
+
 
     public Pacman getPacman() {
         return pacman;
